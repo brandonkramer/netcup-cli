@@ -1,6 +1,6 @@
-# netcup
+# netcup-cli
 
-Go CLI for the netcup **SCP (Server Control Panel) REST API**.
+Go CLI for the [netcup](https://www.netcup.com/) **SCP (Server Control Panel) REST API**.
 
 ## Install
 
