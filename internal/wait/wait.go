@@ -2,7 +2,12 @@ package wait
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
+	"net"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/brandonkramer/netcup-cli/internal/output"
@@ -50,6 +55,7 @@ func Task(
 	deadline := time.Now().Add(opts.Timeout)
 	ticker := time.NewTicker(opts.PollInterval)
 	defer ticker.Stop()
+	transientFails := 0
 
 	for {
 		if time.Now().After(deadline) {
@@ -61,12 +67,41 @@ func Task(
 		case <-ticker.C:
 			resp, err := client.GetApiV1TasksUuidWithResponse(ctx, *task.Uuid)
 			if err != nil {
+				if isTransient(err) {
+					transientFails++
+					backoff(ctx, transientFails, opts.PollInterval)
+					continue
+				}
 				return &task, err
 			}
-			if resp.StatusCode() != 200 || resp.JSON200 == nil {
-				return &task, fmt.Errorf("task poll failed: HTTP %d", resp.StatusCode())
+			if resp == nil {
+				transientFails++
+				backoff(ctx, transientFails, opts.PollInterval)
+				continue
 			}
-			task = *resp.JSON200
+			status := resp.StatusCode()
+			if status == 401 {
+				return &task, output.Exit(output.ExitAuth, fmt.Sprintf("task poll: HTTP 401 — run netcup auth login"))
+			}
+			if status == 429 || status >= 500 {
+				transientFails++
+				backoff(ctx, transientFails, opts.PollInterval)
+				continue
+			}
+			if status != 200 {
+				return &task, fmt.Errorf("task poll failed: HTTP %d", status)
+			}
+			next := resp.JSON200
+			if next == nil {
+				next = resp.HALJSON200
+			}
+			if next == nil {
+				transientFails++
+				backoff(ctx, transientFails, opts.PollInterval)
+				continue
+			}
+			transientFails = 0
+			task = *next
 			if opts.OnProgress != nil {
 				opts.OnProgress(task)
 			}
@@ -75,6 +110,53 @@ func Task(
 			}
 		}
 	}
+}
+
+func backoff(ctx context.Context, fails int, base time.Duration) {
+	if fails < 1 {
+		fails = 1
+	}
+	d := base
+	if fails > 1 {
+		d = time.Duration(fails) * base / 2
+	}
+	if d > 10*time.Second {
+		d = 10 * time.Second
+	}
+	timer := time.NewTimer(d)
+	select {
+	case <-ctx.Done():
+		timer.Stop()
+	case <-timer.C:
+	}
+}
+
+func isTransient(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, io.ErrUnexpectedEOF) {
+		return true
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) && (netErr.Timeout() || netErr.Temporary()) {
+		return true
+	}
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		return isTransient(urlErr.Err)
+	}
+	msg := strings.ToLower(err.Error())
+	for _, frag := range []string{
+		"connection reset", "broken pipe", "i/o timeout", "tls handshake timeout",
+		"server closed idle connection", "http2: client connection force closed",
+		"read tcp", "write tcp", "eof", "temporary failure", "connection refused",
+	} {
+		if strings.Contains(msg, frag) {
+			return true
+		}
+	}
+	return false
 }
 
 func finish(task *scpclient.TaskInfo) (*scpclient.TaskInfo, error) {

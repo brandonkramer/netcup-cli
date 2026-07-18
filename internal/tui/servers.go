@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"os/exec"
 	"strings"
 
 	"github.com/brandonkramer/netcup-cli/internal/scpclient"
@@ -15,7 +16,11 @@ func (m model) serversView() string {
 	if m.loading && len(m.serversList.Items()) == 0 {
 		left = styleMuted.Render("loading servers…")
 	}
-	return m.twoPanels(left, m.detailContent())
+	right := m.viewport.View()
+	if m.detail == nil && m.resourceMode == "" {
+		right = m.detailContent()
+	}
+	return m.twoPanels(left, right)
 }
 
 func (m model) detailContent() string {
@@ -141,22 +146,71 @@ func (m model) updateServersKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.serversList.FilterState() == list.Filtering {
 		return m.updateActiveList(msg)
 	}
+	if m.resourceMode == "metrics" {
+		switch msg.String() {
+		case "c", "d", "n", "p", "h", "R":
+			return m.updateMetricsKeys(msg)
+		case "esc", "enter":
+			m.resourceMode = ""
+			m.metricsData = nil
+			return m, m.loadSelectedDetail()
+		case "pgup", "pgdown":
+			m.viewport, _ = m.viewport.Update(msg)
+			return m, nil
+		}
+	}
 	switch msg.String() {
 	case " ":
 		m.toggleSelect()
 		return m, nil
 	case "enter":
 		m.guest = nil
+		m.resourceMode = ""
+		m.syncServerContext()
 		return m, m.loadSelectedDetail()
 	case "j", "down", "k", "up":
 		var cmd tea.Cmd
 		m.serversList, cmd = m.serversList.Update(msg)
+		m.syncServerContext()
 		// Auto-refresh detail when moving selection
 		return m, tea.Batch(cmd, m.loadSelectedDetail())
+	case "pgup", "pgdown":
+		m.viewport, _ = m.viewport.Update(msg)
+		return m, nil
+	case "m":
+		id, _ := m.focusedServer()
+		if id == 0 {
+			m.status = "no server"
+			return m, nil
+		}
+		m.resourceMode = "metrics"
+		m.loading = true
+		return m, loadMetricsCmd(m.ctx, m.deps.Client, id, m.metricsKind, m.metricsHours)
+	case "L":
+		m.resourceMode = "server-logs"
+		return m, loadServerLogsCmd(m.ctx, m.deps.Client, m.server.ID)
+	case "O":
+		m.confirm = &confirmState{action: "storage-optimize", ids: []int32{m.server.ID}, names: []string{m.server.Name}}
+		return m, nil
+	case "G":
+		m.resourceMode = "gpu"
+		return m, loadGPUCmd(m.ctx, m.deps.Client, m.server.ID)
+	case "y":
+		id, _ := m.focusedServer()
+		if id == 0 {
+			m.status = "no server"
+			return m, nil
+		}
+		if copyServerID(id) {
+			m.status = "copied server id"
+		} else {
+			m.status = "clipboard unavailable"
+		}
+		return m, nil
 	case "R":
 		m.loading = true
 		m.status = "refreshing servers…"
-		return m, loadServersCmd(m.ctx, m.deps.Client)
+		return m, loadServersCmd(m.ctx, m.deps, true)
 	case "s":
 		return m.beginAction("start")
 	case "t":
@@ -176,6 +230,14 @@ func (m model) updateServersKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.beginEdit("hostname")
 	case "n":
 		return m.beginEdit("nickname")
+	case "A":
+		return m.beginEdit("autostart")
+	case "U":
+		return m.beginEdit("uefi")
+	case "b":
+		return m.beginEdit("bootorder")
+	case "K":
+		return m.beginEdit("keyboard-layout")
 	case "g":
 		id, _ := m.focusedServer()
 		if id == 0 {
@@ -232,6 +294,11 @@ func (m *model) clearSelection() {
 	}
 	m.serversList.SetItems(items)
 	m.status = "selection cleared"
+}
+
+func (m *model) syncServerContext() {
+	id, name := m.focusedServer()
+	m.server = serverContext{ID: id, Name: name}
 }
 
 func (m model) beginAction(action string) (tea.Model, tea.Cmd) {
@@ -318,8 +385,7 @@ func (m model) dispatchPower(action string, ids []int32, names []string) tea.Cmd
 func (m model) onServersLoaded(msg serversLoadedMsg) (tea.Model, tea.Cmd) {
 	m.loading = false
 	if msg.err != nil {
-		m.errMsg = msg.err.Error()
-		m.status = "failed to load servers"
+		m.setErr(msg.err, "failed to load servers")
 		return m, nil
 	}
 	m.errMsg = ""
@@ -328,8 +394,13 @@ func (m model) onServersLoaded(msg serversLoadedMsg) (tea.Model, tea.Cmd) {
 		items = append(items, serverItem{server: s})
 	}
 	m.serversList.SetItems(items)
-	m.status = fmt.Sprintf("%d servers", len(items))
+	if msg.cached {
+		m.status = fmt.Sprintf("%d servers (cached)", len(items))
+	} else {
+		m.status = fmt.Sprintf("%d servers", len(items))
+	}
 	if len(items) > 0 {
+		m.syncServerContext()
 		return m, m.loadSelectedDetail()
 	}
 	return m, nil
@@ -337,30 +408,55 @@ func (m model) onServersLoaded(msg serversLoadedMsg) (tea.Model, tea.Cmd) {
 
 func (m model) onDetailLoaded(msg detailLoadedMsg) (tea.Model, tea.Cmd) {
 	if msg.err != nil {
-		m.errMsg = msg.err.Error()
+		m.setErr(msg.err, "failed to load detail")
 		return m, nil
 	}
 	m.detail = msg.server
+	m.server = serverContext{ID: derefInt(msg.server.Id), Name: derefStr(msg.server.Name)}
+	if m.server.Name == "" {
+		_, m.server.Name = m.focusedServer()
+	}
+	m.viewport.SetContent(m.detailContent())
+	m.viewport.GotoTop()
 	m.errMsg = ""
 	m.status = "ready"
 	return m, nil
 }
 
+func copyServerID(id int32) bool {
+	value := fmt.Sprintf("%d", id)
+	for _, name := range []string{"pbcopy", "wl-copy"} {
+		cmd := exec.Command(name)
+		in, err := cmd.StdinPipe()
+		if err != nil {
+			continue
+		}
+		if err := cmd.Start(); err != nil {
+			continue
+		}
+		_, _ = in.Write([]byte(value))
+		_ = in.Close()
+		if cmd.Wait() == nil {
+			return true
+		}
+	}
+	return false
+}
+
 func (m model) onPowerStarted(msg powerStartedMsg) (tea.Model, tea.Cmd) {
-	j := jobFromTask(msg.serverID, msg.serverName, msg.action, msg.task, msg.err)
+	j := jobFromTaskStatus(msg.serverID, msg.serverName, msg.action, msg.status, msg.task, msg.err)
 	m.status = fmt.Sprintf("%s → %s", msg.action, msg.serverName)
+	if j.State == "UNTRACKED" {
+		m.status = msg.action + " accepted (untracked — refresh to verify)"
+	}
 	cmd := m.trackJob(j)
 	if j.Done && j.Err == "" {
-		return m, tea.Batch(cmd, loadServersCmd(m.ctx, m.deps.Client), m.loadSelectedDetail())
+		return m, tea.Batch(cmd, loadServersCmd(m.ctx, m.deps, false), m.loadSelectedDetail())
 	}
 	return m, cmd
 }
 
 func (m model) onJobsPolled(msg jobsPolledMsg) (tea.Model, tea.Cmd) {
-	if msg.err != nil {
-		m.errMsg = msg.err.Error()
-		return m, nil
-	}
 	updates := make(map[string]job, len(msg.jobs))
 	for _, j := range msg.jobs {
 		if j.UUID != "" {
@@ -372,6 +468,10 @@ func (m model) onJobsPolled(msg jobsPolledMsg) (tea.Model, tea.Cmd) {
 			m.jobs[i] = u
 		}
 	}
+	if msg.err != nil {
+		m.errMsg = msg.err.Error()
+		return m.withAuthGate(msg.err), nil
+	}
 	allDone := true
 	for _, j := range m.jobs {
 		if !j.Done {
@@ -381,7 +481,7 @@ func (m model) onJobsPolled(msg jobsPolledMsg) (tea.Model, tea.Cmd) {
 	}
 	if allDone {
 		m.status = "jobs finished"
-		return m, tea.Batch(loadServersCmd(m.ctx, m.deps.Client), m.loadSelectedDetail())
+		return m, tea.Batch(loadServersCmd(m.ctx, m.deps, false), m.loadSelectedDetail())
 	}
 	if !m.deadline.IsZero() && timeAfterDeadline(m) {
 		m.errMsg = "task wait timed out"

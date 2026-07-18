@@ -57,47 +57,69 @@ func (m *Manager) Credentials() *Credentials {
 	return m.creds
 }
 
-func (m *Manager) Login(ctx context.Context, openBrowser, save bool) (*Credentials, error) {
+// DeviceLogin holds an in-flight device-code authorization.
+type DeviceLogin struct {
+	VerifyURL string
+	UserCode  string
+	resp      *oauth2.DeviceAuthResponse
+	mgr       *Manager
+}
+
+// StartDeviceLogin begins OIDC device authorization. Call Wait to finish.
+func (m *Manager) StartDeviceLogin(ctx context.Context) (*DeviceLogin, error) {
 	resp, err := m.oauth.DeviceAuth(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("device auth: %w", err)
 	}
-
 	verifyURL := resp.VerificationURIComplete
 	if verifyURL == "" {
 		verifyURL = resp.VerificationURI
 	}
-	fmt.Fprintf(os.Stderr, "Open this URL to authorize:\n\n  %s\n\nUser code: %s\n", verifyURL, resp.UserCode)
+	return &DeviceLogin{
+		VerifyURL: verifyURL,
+		UserCode:  resp.UserCode,
+		resp:      resp,
+		mgr:       m,
+	}, nil
+}
 
-	if openBrowser {
-		_ = openURL(verifyURL)
-	}
-
-	tok, err := m.oauth.DeviceAccessToken(ctx, resp)
+// Wait polls until the user completes device authorization.
+func (d *DeviceLogin) Wait(ctx context.Context, save bool) (*Credentials, error) {
+	tok, err := d.mgr.oauth.DeviceAccessToken(ctx, d.resp)
 	if err != nil {
 		return nil, fmt.Errorf("device token: %w", err)
 	}
 	if tok.RefreshToken == "" {
 		return nil, fmt.Errorf("no refresh token returned; ensure offline_access scope is granted")
 	}
-
 	userID, username := claimsFromAccess(tok.AccessToken)
 	creds := &Credentials{
 		RefreshToken: tok.RefreshToken,
 		UserID:       userID,
 		Username:     username,
 	}
-	m.mu.Lock()
-	m.token = tok
-	m.creds = creds
-	m.mu.Unlock()
-
+	d.mgr.mu.Lock()
+	d.mgr.token = tok
+	d.mgr.creds = creds
+	d.mgr.mu.Unlock()
 	if save {
-		if err := SaveCredentials(m.cfg.CredentialsPath(), creds); err != nil {
+		if err := SaveCredentials(d.mgr.cfg.CredentialsPath(), creds); err != nil {
 			return nil, err
 		}
 	}
 	return creds, nil
+}
+
+func (m *Manager) Login(ctx context.Context, openBrowser, save bool) (*Credentials, error) {
+	dev, err := m.StartDeviceLogin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	fmt.Fprintf(os.Stderr, "Open this URL to authorize:\n\n  %s\n\nUser code: %s\n", dev.VerifyURL, dev.UserCode)
+	if openBrowser {
+		_ = openURL(dev.VerifyURL)
+	}
+	return dev.Wait(ctx, save)
 }
 
 func (m *Manager) Logout(revoke bool) error {
@@ -161,14 +183,14 @@ func (m *Manager) Refresh(ctx context.Context) (*oauth2.Token, error) {
 	return ts.Token()
 }
 
-func (m *Manager) UserID() (string, error) {
+func (m *Manager) UserID(ctx context.Context) (string, error) {
 	if err := m.ensureLoaded(); err != nil {
 		return "", err
 	}
 	if m.creds.UserID != "" {
 		return m.creds.UserID, nil
 	}
-	tok, err := m.Refresh(context.Background())
+	tok, err := m.Refresh(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -181,8 +203,8 @@ func (m *Manager) UserID() (string, error) {
 	return uid, nil
 }
 
-func (m *Manager) UserIDInt() (int32, error) {
-	uid, err := m.UserID()
+func (m *Manager) UserIDInt(ctx context.Context) (int32, error) {
+	uid, err := m.UserID(ctx)
 	if err != nil {
 		return 0, err
 	}
@@ -294,6 +316,11 @@ func claimsFromAccess(access string) (userID, username string) {
 		username = pref
 	}
 	return userID, username
+}
+
+// OpenURL opens a URL in the default browser (best-effort).
+func OpenURL(url string) error {
+	return openURL(url)
 }
 
 func openURL(url string) error {

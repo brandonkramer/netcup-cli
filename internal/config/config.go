@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/knadh/koanf/parsers/yaml"
@@ -11,6 +13,9 @@ import (
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/v2"
 )
+
+// Profile must start and end with an alphanumeric; ".", "_", "-" allowed in the middle.
+var profileNameRe = regexp.MustCompile(`^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$`)
 
 const (
 	DefaultBaseURL     = "https://www.servercontrolpanel.de"
@@ -51,6 +56,9 @@ func Load(profile, configDir string) (*Config, error) {
 	}
 	if profile == "" {
 		profile = DefaultProfile
+	}
+	if err := ValidateProfile(profile); err != nil {
+		return nil, err
 	}
 
 	cfg := &Config{
@@ -98,11 +106,26 @@ func Load(profile, configDir string) (*Config, error) {
 	if os.Getenv("NETCUP_FORMAT") != "" {
 		cfg.Format = os.Getenv("NETCUP_FORMAT")
 	}
+	if err := ValidateProfile(cfg.Profile); err != nil {
+		return nil, err
+	}
 
-	if err := os.MkdirAll(configDir, 0o755); err != nil {
+	if err := os.MkdirAll(configDir, 0o700); err != nil {
 		return nil, fmt.Errorf("create config dir: %w", err)
 	}
+	_ = os.Chmod(configDir, 0o700)
 	return cfg, nil
+}
+
+// ValidateProfile rejects path separators and other unsafe profile names.
+func ValidateProfile(profile string) error {
+	if profile == "" || profile == "." || profile == ".." || strings.Contains(profile, "..") {
+		return fmt.Errorf("invalid --profile %q (use letters, digits, '.', '_' or '-'; not '.' or '..')", profile)
+	}
+	if !profileNameRe.MatchString(profile) {
+		return fmt.Errorf("invalid --profile %q (must start/end with alphanumeric; '.', '_' or '-' allowed in the middle)", profile)
+	}
+	return nil
 }
 
 func (c *Config) CredentialsPath() string {
@@ -110,7 +133,14 @@ func (c *Config) CredentialsPath() string {
 }
 
 func (c *Config) CacheDir() string {
-	return filepath.Join(c.ConfigDir, "cache", c.Profile)
+	dir := filepath.Clean(filepath.Join(c.ConfigDir, "cache", c.Profile))
+	base := filepath.Clean(filepath.Join(c.ConfigDir, "cache"))
+	rel, err := filepath.Rel(base, dir)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+		// Should be unreachable after ValidateProfile; fall back to a safe name.
+		return filepath.Join(base, "default")
+	}
+	return dir
 }
 
 func (c *Config) OpenAPIPath() string {

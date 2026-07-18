@@ -6,6 +6,7 @@ import (
 
 type serversLoadedMsg struct {
 	servers []scpclient.ServerListMinimal
+	cached  bool
 	err     error
 }
 
@@ -23,6 +24,7 @@ type powerStartedMsg struct {
 	serverID   int32
 	serverName string
 	action     string
+	status     int
 	task       *scpclient.TaskInfo
 	err        error
 }
@@ -50,9 +52,10 @@ type tasksLoadedMsg struct {
 }
 
 type taskCancelMsg struct {
-	uuid string
-	task *scpclient.TaskInfo
-	err  error
+	uuid   string
+	status int
+	task   *scpclient.TaskInfo
+	err    error
 }
 
 type metricsLoadedMsg struct {
@@ -62,27 +65,46 @@ type metricsLoadedMsg struct {
 }
 
 type mediaLoadedMsg struct {
-	attached any
-	catalog  []scpclient.IsoImage
-	userISOs any
-	err      error
+	attached   any
+	catalog    []scpclient.IsoImage
+	userISOs   any
+	userImages any
+	err        error
 }
 
 type isoActionMsg struct {
 	action string
+	status int
 	task   *scpclient.TaskInfo
 	err    error
 }
 
 type attrSetMsg struct {
-	attr string
-	task *scpclient.TaskInfo
-	err  error
+	attr   string
+	status int
+	task   *scpclient.TaskInfo
+	err    error
 }
 
 type rescueMsg struct {
 	action string
+	status int
 	data   any
+	task   *scpclient.TaskInfo
+	err    error
+}
+
+type resourceLoadedMsg struct {
+	tab, mode string
+	items     []resourceItem
+	detail    string
+	warning   string
+	err       error
+}
+
+type resourceActionMsg struct {
+	action string
+	status int
 	task   *scpclient.TaskInfo
 	err    error
 }

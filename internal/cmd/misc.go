@@ -37,6 +37,9 @@ func newNICsCmd() *cobra.Command {
 				if err != nil {
 					return err
 				}
+				if resp == nil {
+					return fmt.Errorf("nics.list: empty response")
+				}
 				if resp.StatusCode() != 200 {
 					return app.HandleAPIError("nics.list", resp.StatusCode(), resp.Body)
 				}
@@ -59,6 +62,9 @@ func newNICsCmd() *cobra.Command {
 				resp, err := app.Client.GetApiV1ServersServerIdInterfacesMacWithResponse(cmd.Context(), id, mac, nil)
 				if err != nil {
 					return err
+				}
+				if resp == nil {
+					return fmt.Errorf("nics.get: empty response")
 				}
 				if resp.StatusCode() != 200 {
 					return app.HandleAPIError("nics.get", resp.StatusCode(), resp.Body)
@@ -88,6 +94,9 @@ func newNICsCmd() *cobra.Command {
 				if err != nil {
 					return err
 				}
+				if resp == nil {
+					return fmt.Errorf("rdns.ipv4.get: empty response")
+				}
 				return handleTaskResp(cmd.Context(), "nics.delete", resp.StatusCode(), firstTask(resp.HALJSON202, resp.JSON202), resp.Body)
 			},
 		},
@@ -111,6 +120,9 @@ func newRDNSCmd() *cobra.Command {
 				if err != nil {
 					return err
 				}
+				if resp == nil {
+					return fmt.Errorf("rdns.ipv4.get: empty response")
+				}
 				if resp.StatusCode() != 200 {
 					return app.HandleAPIError("rdns.ipv4.get", resp.StatusCode(), resp.Body)
 				}
@@ -129,6 +141,9 @@ func newRDNSCmd() *cobra.Command {
 				resp, err := app.Client.PostApiV1RdnsIpv4WithResponse(cmd.Context(), body)
 				if err != nil {
 					return err
+				}
+				if resp == nil {
+					return fmt.Errorf("rdns.ipv4.set: empty response")
 				}
 				if resp.StatusCode() != 200 && resp.StatusCode() != 201 && resp.StatusCode() != 204 {
 					return app.HandleAPIError("rdns.ipv4.set", resp.StatusCode(), resp.Body)
@@ -151,6 +166,9 @@ func newRDNSCmd() *cobra.Command {
 				if err != nil {
 					return err
 				}
+				if resp == nil {
+					return fmt.Errorf("rdns.ipv4.delete: empty response")
+				}
 				if resp.StatusCode() != 200 && resp.StatusCode() != 204 {
 					return app.HandleAPIError("rdns.ipv4.delete", resp.StatusCode(), resp.Body)
 				}
@@ -172,6 +190,9 @@ func newRDNSCmd() *cobra.Command {
 				if err != nil {
 					return err
 				}
+				if resp == nil {
+					return fmt.Errorf("rdns.ipv6.get: empty response")
+				}
 				if resp.StatusCode() != 200 {
 					return app.HandleAPIError("rdns.ipv6.get", resp.StatusCode(), resp.Body)
 				}
@@ -190,6 +211,9 @@ func newRDNSCmd() *cobra.Command {
 				resp, err := app.Client.PostApiV1RdnsIpv6WithResponse(cmd.Context(), body)
 				if err != nil {
 					return err
+				}
+				if resp == nil {
+					return fmt.Errorf("rdns.ipv6.set: empty response")
 				}
 				if resp.StatusCode() != 200 && resp.StatusCode() != 201 && resp.StatusCode() != 204 {
 					return app.HandleAPIError("rdns.ipv6.set", resp.StatusCode(), resp.Body)
@@ -211,6 +235,9 @@ func newRDNSCmd() *cobra.Command {
 				resp, err := app.Client.DeleteApiV1RdnsIpv6IpWithResponse(cmd.Context(), args[0])
 				if err != nil {
 					return err
+				}
+				if resp == nil {
+					return fmt.Errorf("rdns.ipv6.delete: empty response")
 				}
 				if resp.StatusCode() != 200 && resp.StatusCode() != 204 {
 					return app.HandleAPIError("rdns.ipv6.delete", resp.StatusCode(), resp.Body)
@@ -235,7 +262,7 @@ func newFailoverCmd() *cobra.Command {
 				if err := app.EnsureClient(cmd.Context()); err != nil {
 					return err
 				}
-				uid, err := app.ResolveUserID()
+				uid, err := app.ResolveUserID(cmd.Context())
 				if err != nil {
 					return err
 				}
@@ -243,6 +270,9 @@ func newFailoverCmd() *cobra.Command {
 					resp, err := app.Client.GetApiV1UsersUserIdFailoveripsV4WithResponse(cmd.Context(), uid, nil)
 					if err != nil {
 						return err
+					}
+					if resp == nil {
+						return fmt.Errorf("%s: empty response", app.Out.Command)
 					}
 					if resp.StatusCode() != 200 {
 						return app.HandleAPIError(app.Out.Command, resp.StatusCode(), resp.Body)
@@ -252,6 +282,9 @@ func newFailoverCmd() *cobra.Command {
 				resp, err := app.Client.GetApiV1UsersUserIdFailoveripsV6WithResponse(cmd.Context(), uid, nil)
 				if err != nil {
 					return err
+				}
+				if resp == nil {
+					return fmt.Errorf("%s: empty response", app.Out.Command)
 				}
 				if resp.StatusCode() != 200 {
 					return app.HandleAPIError(app.Out.Command, resp.StatusCode(), resp.Body)
@@ -267,7 +300,7 @@ func newFailoverCmd() *cobra.Command {
 				if err := app.EnsureClient(cmd.Context()); err != nil {
 					return err
 				}
-				uid, err := app.ResolveUserID()
+				uid, err := app.ResolveUserID(cmd.Context())
 				if err != nil {
 					return err
 				}
@@ -285,11 +318,17 @@ func newFailoverCmd() *cobra.Command {
 					if err != nil {
 						return err
 					}
+					if resp == nil {
+						return fmt.Errorf("request: empty response")
+					}
 					return handleTaskResp(cmd.Context(), app.Out.Command, resp.StatusCode(), firstTask(resp.HALJSON202, resp.JSON202), resp.Body)
 				}
 				resp, err := app.Client.PatchApiV1UsersUserIdFailoveripsV6IdWithBodyWithResponse(cmd.Context(), uid, fid, "application/merge-patch+json", bytes.NewReader(body))
 				if err != nil {
 					return err
+				}
+				if resp == nil {
+					return fmt.Errorf("request: empty response")
 				}
 				return handleTaskResp(cmd.Context(), app.Out.Command, resp.StatusCode(), firstTask(resp.HALJSON202, resp.JSON202), resp.Body)
 			},
@@ -310,13 +349,16 @@ func newVLANsCmd() *cobra.Command {
 				if err := app.EnsureClient(cmd.Context()); err != nil {
 					return err
 				}
-				uid, err := app.ResolveUserID()
+				uid, err := app.ResolveUserID(cmd.Context())
 				if err != nil {
 					return err
 				}
 				resp, err := app.Client.GetApiV1UsersUserIdVlansWithResponse(cmd.Context(), uid, nil)
 				if err != nil {
 					return err
+				}
+				if resp == nil {
+					return fmt.Errorf("vlans.list: empty response")
 				}
 				if resp.StatusCode() != 200 {
 					return app.HandleAPIError("vlans.list", resp.StatusCode(), resp.Body)
@@ -332,7 +374,7 @@ func newVLANsCmd() *cobra.Command {
 				if err := app.EnsureClient(cmd.Context()); err != nil {
 					return err
 				}
-				uid, err := app.ResolveUserID()
+				uid, err := app.ResolveUserID(cmd.Context())
 				if err != nil {
 					return err
 				}
@@ -343,6 +385,9 @@ func newVLANsCmd() *cobra.Command {
 				resp, err := app.Client.GetApiV1UsersUserIdVlansVlanIdWithResponse(cmd.Context(), uid, vid)
 				if err != nil {
 					return err
+				}
+				if resp == nil {
+					return fmt.Errorf("vlans.get: empty response")
 				}
 				if resp.StatusCode() != 200 {
 					return app.HandleAPIError("vlans.get", resp.StatusCode(), resp.Body)
@@ -365,6 +410,9 @@ func newVLANsCmd() *cobra.Command {
 				resp, err := app.Client.GetApiV1VlansVlanIdWithResponse(cmd.Context(), vid)
 				if err != nil {
 					return err
+				}
+				if resp == nil {
+					return fmt.Errorf("vlans.get-global: empty response")
 				}
 				if resp.StatusCode() != 200 {
 					return app.HandleAPIError("vlans.get-global", resp.StatusCode(), resp.Body)
@@ -397,6 +445,9 @@ func newFirewallCmd() *cobra.Command {
 				if err != nil {
 					return err
 				}
+				if resp == nil {
+					return fmt.Errorf("firewall.get: empty response")
+				}
 				if resp.StatusCode() != 200 {
 					return app.HandleAPIError("firewall.get", resp.StatusCode(), resp.Body)
 				}
@@ -420,6 +471,9 @@ func newFirewallCmd() *cobra.Command {
 				if err != nil {
 					return err
 				}
+				if resp == nil {
+					return fmt.Errorf("firewall.reapply: empty response")
+				}
 				return handleTaskResp(cmd.Context(), "firewall.reapply", resp.StatusCode(), firstTask(resp.HALJSON202, resp.JSON202), resp.Body)
 			},
 		},
@@ -440,6 +494,9 @@ func newFirewallCmd() *cobra.Command {
 				if err != nil {
 					return err
 				}
+				if resp == nil {
+					return fmt.Errorf("firewall.restore-copied: empty response")
+				}
 				return handleTaskResp(cmd.Context(), "firewall.restore-copied", resp.StatusCode(), firstTask(resp.HALJSON202, resp.JSON202), resp.Body)
 			},
 		},
@@ -459,13 +516,16 @@ func newFirewallPoliciesCmd() *cobra.Command {
 				if err := app.EnsureClient(cmd.Context()); err != nil {
 					return err
 				}
-				uid, err := app.ResolveUserID()
+				uid, err := app.ResolveUserID(cmd.Context())
 				if err != nil {
 					return err
 				}
 				resp, err := app.Client.GetApiV1UsersUserIdFirewallPoliciesWithResponse(cmd.Context(), uid, nil)
 				if err != nil {
 					return err
+				}
+				if resp == nil {
+					return fmt.Errorf("firewall-policies.list: empty response")
 				}
 				if resp.StatusCode() != 200 {
 					return app.HandleAPIError("firewall-policies.list", resp.StatusCode(), resp.Body)
@@ -481,7 +541,7 @@ func newFirewallPoliciesCmd() *cobra.Command {
 				if err := app.EnsureClient(cmd.Context()); err != nil {
 					return err
 				}
-				uid, err := app.ResolveUserID()
+				uid, err := app.ResolveUserID(cmd.Context())
 				if err != nil {
 					return err
 				}
@@ -492,6 +552,9 @@ func newFirewallPoliciesCmd() *cobra.Command {
 				resp, err := app.Client.GetApiV1UsersUserIdFirewallPoliciesIdWithResponse(cmd.Context(), uid, pid)
 				if err != nil {
 					return err
+				}
+				if resp == nil {
+					return fmt.Errorf("firewall-policies.get: empty response")
 				}
 				if resp.StatusCode() != 200 {
 					return app.HandleAPIError("firewall-policies.get", resp.StatusCode(), resp.Body)
@@ -510,7 +573,7 @@ func newFirewallPoliciesCmd() *cobra.Command {
 				if err := app.EnsureClient(cmd.Context()); err != nil {
 					return err
 				}
-				uid, err := app.ResolveUserID()
+				uid, err := app.ResolveUserID(cmd.Context())
 				if err != nil {
 					return err
 				}
@@ -521,6 +584,9 @@ func newFirewallPoliciesCmd() *cobra.Command {
 				resp, err := app.Client.DeleteApiV1UsersUserIdFirewallPoliciesIdWithResponse(cmd.Context(), uid, pid)
 				if err != nil {
 					return err
+				}
+				if resp == nil {
+					return fmt.Errorf("firewall-policies.delete: empty response")
 				}
 				if resp.StatusCode() != 200 && resp.StatusCode() != 204 {
 					return app.HandleAPIError("firewall-policies.delete", resp.StatusCode(), resp.Body)
@@ -562,11 +628,17 @@ func newMetricsCmd() *cobra.Command {
 					if err != nil {
 						return err
 					}
+					if resp == nil {
+						return fmt.Errorf("%s: empty response", app.Out.Command)
+					}
 					status, body, data = resp.StatusCode(), resp.Body, firstJSON(resp.JSON200, resp.HALJSON200, resp.Body)
 				case "disk":
 					resp, err := app.Client.GetApiV1ServersServerIdMetricsDiskWithResponse(cmd.Context(), id, &scpclient.GetApiV1ServersServerIdMetricsDiskParams{Hours: hoursPtr})
 					if err != nil {
 						return err
+					}
+					if resp == nil {
+						return fmt.Errorf("%s: empty response", app.Out.Command)
 					}
 					status, body, data = resp.StatusCode(), resp.Body, firstJSON(resp.JSON200, resp.HALJSON200, resp.Body)
 				case "network":
@@ -574,11 +646,17 @@ func newMetricsCmd() *cobra.Command {
 					if err != nil {
 						return err
 					}
+					if resp == nil {
+						return fmt.Errorf("%s: empty response", app.Out.Command)
+					}
 					status, body, data = resp.StatusCode(), resp.Body, firstJSON(resp.JSON200, resp.HALJSON200, resp.Body)
 				case "packets":
 					resp, err := app.Client.GetApiV1ServersServerIdMetricsNetworkPacketWithResponse(cmd.Context(), id, &scpclient.GetApiV1ServersServerIdMetricsNetworkPacketParams{Hours: hoursPtr})
 					if err != nil {
 						return err
+					}
+					if resp == nil {
+						return fmt.Errorf("%s: empty response", app.Out.Command)
 					}
 					status, body, data = resp.StatusCode(), resp.Body, firstJSON(resp.JSON200, resp.HALJSON200, resp.Body)
 				}
@@ -610,6 +688,9 @@ func newTasksCmd() *cobra.Command {
 				if err != nil {
 					return err
 				}
+				if resp == nil {
+					return fmt.Errorf("tasks.get: empty response")
+				}
 				if resp.StatusCode() != 200 {
 					return app.HandleAPIError("tasks.get", resp.StatusCode(), resp.Body)
 				}
@@ -627,6 +708,9 @@ func newTasksCmd() *cobra.Command {
 				resp, err := app.Client.PutApiV1TasksUuidCancelWithResponse(cmd.Context(), args[0])
 				if err != nil {
 					return err
+				}
+				if resp == nil {
+					return fmt.Errorf("tasks.cancel: empty response")
 				}
 				return handleTaskResp(cmd.Context(), "tasks.cancel", resp.StatusCode(), firstTask(resp.HALJSON202, resp.JSON202), resp.Body)
 			},
@@ -667,6 +751,9 @@ func newTasksListCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if resp == nil {
+				return fmt.Errorf("tasks.list: empty response")
+			}
 			if resp.StatusCode() != 200 {
 				return app.HandleAPIError("tasks.list", resp.StatusCode(), resp.Body)
 			}
@@ -692,13 +779,16 @@ func newUsersCmd() *cobra.Command {
 				if err := app.EnsureClient(cmd.Context()); err != nil {
 					return err
 				}
-				uid, err := app.ResolveUserID()
+				uid, err := app.ResolveUserID(cmd.Context())
 				if err != nil {
 					return err
 				}
 				resp, err := app.Client.GetApiV1UsersUserIdWithResponse(cmd.Context(), uid)
 				if err != nil {
 					return err
+				}
+				if resp == nil {
+					return fmt.Errorf("users.get: empty response")
 				}
 				if resp.StatusCode() != 200 {
 					return app.HandleAPIError("users.get", resp.StatusCode(), resp.Body)
@@ -721,7 +811,7 @@ func newUsersLogsCmd() *cobra.Command {
 			if err := app.EnsureClient(cmd.Context()); err != nil {
 				return err
 			}
-			uid, err := app.ResolveUserID()
+			uid, err := app.ResolveUserID(cmd.Context())
 			if err != nil {
 				return err
 			}
@@ -735,6 +825,9 @@ func newUsersLogsCmd() *cobra.Command {
 			resp, err := app.Client.GetApiV1UsersUserIdLogsWithResponse(cmd.Context(), uid, params)
 			if err != nil {
 				return err
+			}
+			if resp == nil {
+				return fmt.Errorf("users.logs: empty response")
 			}
 			if resp.StatusCode() != 200 {
 				return app.HandleAPIError("users.logs", resp.StatusCode(), resp.Body)
@@ -758,13 +851,16 @@ func newSSHKeysCmd() *cobra.Command {
 				if err := app.EnsureClient(cmd.Context()); err != nil {
 					return err
 				}
-				uid, err := app.ResolveUserID()
+				uid, err := app.ResolveUserID(cmd.Context())
 				if err != nil {
 					return err
 				}
 				resp, err := app.Client.GetApiV1UsersUserIdSshKeysWithResponse(cmd.Context(), uid)
 				if err != nil {
 					return err
+				}
+				if resp == nil {
+					return fmt.Errorf("ssh-keys.list: empty response")
 				}
 				if resp.StatusCode() != 200 {
 					return app.HandleAPIError("ssh-keys.list", resp.StatusCode(), resp.Body)
@@ -783,7 +879,7 @@ func newSSHKeysCmd() *cobra.Command {
 				if err := app.EnsureClient(cmd.Context()); err != nil {
 					return err
 				}
-				uid, err := app.ResolveUserID()
+				uid, err := app.ResolveUserID(cmd.Context())
 				if err != nil {
 					return err
 				}
@@ -794,6 +890,9 @@ func newSSHKeysCmd() *cobra.Command {
 				resp, err := app.Client.DeleteApiV1UsersUserIdSshKeysIdWithResponse(cmd.Context(), uid, kid)
 				if err != nil {
 					return err
+				}
+				if resp == nil {
+					return fmt.Errorf("ssh-keys.delete: empty response")
 				}
 				if resp.StatusCode() != 200 && resp.StatusCode() != 204 {
 					return app.HandleAPIError("ssh-keys.delete", resp.StatusCode(), resp.Body)
@@ -853,6 +952,9 @@ func newSpecCmd() *cobra.Command {
 				if err != nil {
 					return err
 				}
+				if resp == nil {
+					return fmt.Errorf("spec.show: empty response")
+				}
 				if resp.StatusCode() != 200 {
 					return app.HandleAPIError("spec.show", resp.StatusCode(), resp.Body)
 				}
@@ -872,6 +974,9 @@ func newSpecCmd() *cobra.Command {
 				resp, err := app.Client.GetApiV1OpenapiWithResponse(cmd.Context())
 				if err != nil {
 					return err
+				}
+				if resp == nil {
+					return fmt.Errorf("spec.update: empty response")
 				}
 				if resp.StatusCode() != 200 {
 					return app.HandleAPIError("spec.update", resp.StatusCode(), resp.Body)
@@ -898,6 +1003,9 @@ func newSpecCmd() *cobra.Command {
 				resp, err := app.Client.PostApiV1OpenapiMcpWithResponse(cmd.Context())
 				if err != nil {
 					return err
+				}
+				if resp == nil {
+					return fmt.Errorf("spec.mcp: empty response")
 				}
 				var body any
 				if len(resp.Body) > 0 && json.Unmarshal(resp.Body, &body) != nil {
@@ -1028,11 +1136,11 @@ Hints:
 				cands := make([]map[string]any, 0, len(matches))
 				for _, m := range matches {
 					cands = append(cands, map[string]any{
-						"method": m.Op.Method,
-						"path":   m.Op.Path,
+						"method":  m.Op.Method,
+						"path":    m.Op.Path,
 						"summary": m.Op.Summary,
-						"score":  m.Score,
-						"reason": m.Reason,
+						"score":   m.Score,
+						"reason":  m.Reason,
 					})
 				}
 				_ = app.Out.Fail(output.ExitUsage, "usage", "", err.Error(), 0, nil)
@@ -1065,7 +1173,7 @@ Hints:
 			if _, ok := pathParams["userId"]; !ok {
 				for _, p := range op.PathParams {
 					if p == "userId" {
-						if uid, err := app.ResolveUserID(); err == nil {
+						if uid, err := app.ResolveUserID(cmd.Context()); err == nil {
 							pathParams["userId"] = fmt.Sprint(uid)
 						}
 					}
@@ -1227,9 +1335,9 @@ func newEndpointsCmd() *cobra.Command {
 				return err
 			}
 			type row struct {
-				Method string `json:"method"`
-				Path   string `json:"path"`
-				Tag    string `json:"tag,omitempty"`
+				Method  string `json:"method"`
+				Path    string `json:"path"`
+				Tag     string `json:"tag,omitempty"`
 				Summary string `json:"summary,omitempty"`
 			}
 			var rows []row

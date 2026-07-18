@@ -17,6 +17,7 @@ type Entry struct {
 	TTL       time.Duration   `json:"ttl"`
 	Body      json.RawMessage `json:"body"`
 	ETag      string          `json:"etag,omitempty"`
+	Tags      []string        `json:"tags,omitempty"`
 }
 
 type Store struct {
@@ -27,9 +28,10 @@ type Store struct {
 
 func New(dir string, enabled bool) (*Store, error) {
 	if enabled {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
 			return nil, err
 		}
+		_ = os.Chmod(dir, 0o700)
 	}
 	return &Store{dir: dir, enabled: enabled}, nil
 }
@@ -41,6 +43,13 @@ func (s *Store) SetEnabled(v bool) { s.enabled = v }
 func Key(method, path, query, userID string) string {
 	h := sha256.Sum256([]byte(strings.ToUpper(method) + "\n" + path + "\n" + query + "\n" + userID))
 	return hex.EncodeToString(h[:16])
+}
+
+// ServersListKey matches the CLI `servers list` cache key (default filters).
+func ServersListKey(userID string, q, name, ip string, sortBy []string, limit, offset, firewallPolicyID int32) string {
+	return Key("GET", "/api/v1/servers",
+		fmt.Sprintf("%s|%s|%s|%v|%d|%d|%d", q, name, ip, sortBy, limit, offset, firewallPolicyID),
+		userID)
 }
 
 func (s *Store) Get(key string) (json.RawMessage, time.Duration, time.Duration, bool) {
@@ -66,7 +75,8 @@ func (s *Store) Get(key string) (json.RawMessage, time.Duration, time.Duration, 
 	return e.Body, age, e.TTL, true
 }
 
-func (s *Store) Put(key string, body any, ttl time.Duration) error {
+// Put stores body under key. Optional tags enable BustTags invalidation.
+func (s *Store) Put(key string, body any, ttl time.Duration, tags ...string) error {
 	if !s.enabled {
 		return nil
 	}
@@ -74,7 +84,12 @@ func (s *Store) Put(key string, body any, ttl time.Duration) error {
 	if err != nil {
 		return err
 	}
-	e := Entry{FetchedAt: time.Now().UTC(), TTL: ttl, Body: raw}
+	e := Entry{
+		FetchedAt: time.Now().UTC(),
+		TTL:       ttl,
+		Body:      raw,
+		Tags:      uniqueTags(tags),
+	}
 	b, err := json.Marshal(e)
 	if err != nil {
 		return err
@@ -86,6 +101,19 @@ func (s *Store) Put(key string, body any, ttl time.Duration) error {
 		return err
 	}
 	return os.Rename(tmp, s.path(key))
+}
+
+func (s *Store) Delete(key string) error {
+	if !s.enabled {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	err := os.Remove(s.path(key))
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
 }
 
 func (s *Store) DeletePrefix(prefix string) (int, error) {
@@ -104,11 +132,11 @@ func (s *Store) DeletePrefix(prefix string) (int, error) {
 	n := 0
 	for _, e := range entries {
 		name := e.Name()
-		if prefix != "" && !strings.HasPrefix(name, prefix) && name != prefix+".json" {
-			// also allow tag-based bust via sidecar prefixes in key name
-			if !strings.Contains(name, prefix) {
-				continue
-			}
+		if !strings.HasSuffix(name, ".json") {
+			continue
+		}
+		if prefix != "" && !strings.HasPrefix(name, prefix) && name != prefix+".json" && !strings.Contains(name, prefix) {
+			continue
 		}
 		if err := os.Remove(filepath.Join(s.dir, name)); err == nil {
 			n++
@@ -121,12 +149,48 @@ func (s *Store) Clear() (int, error) {
 	return s.DeletePrefix("")
 }
 
+// BustTags deletes every entry that was Put with any of the given tags.
 func (s *Store) BustTags(tags ...string) {
-	if !s.enabled {
+	if !s.enabled || len(tags) == 0 {
 		return
 	}
-	for _, tag := range tags {
-		_, _ = s.DeletePrefix(tag)
+	want := map[string]struct{}{}
+	for _, t := range tags {
+		t = strings.TrimSpace(t)
+		if t != "" {
+			want[t] = struct{}{}
+		}
+	}
+	if len(want) == 0 {
+		return
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	entries, err := os.ReadDir(s.dir)
+	if err != nil {
+		return
+	}
+	for _, de := range entries {
+		name := de.Name()
+		if de.IsDir() || !strings.HasSuffix(name, ".json") || strings.HasSuffix(name, ".tmp") {
+			continue
+		}
+		path := filepath.Join(s.dir, name)
+		b, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		var e Entry
+		if err := json.Unmarshal(b, &e); err != nil {
+			continue
+		}
+		for _, t := range e.Tags {
+			if _, ok := want[t]; ok {
+				_ = os.Remove(path)
+				break
+			}
+		}
 	}
 }
 
@@ -138,8 +202,14 @@ func (s *Store) Stats() (map[string]any, error) {
 		}
 		return nil, err
 	}
+	n := 0
+	for _, e := range entries {
+		if strings.HasSuffix(e.Name(), ".json") && !strings.HasSuffix(e.Name(), ".tmp") {
+			n++
+		}
+	}
 	return map[string]any{
-		"entries": len(entries),
+		"entries": n,
 		"dir":     s.dir,
 		"enabled": s.enabled,
 	}, nil
@@ -147,6 +217,26 @@ func (s *Store) Stats() (map[string]any, error) {
 
 func (s *Store) path(key string) string {
 	return filepath.Join(s.dir, fmt.Sprintf("%s.json", key))
+}
+
+func uniqueTags(tags []string) []string {
+	if len(tags) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(tags))
+	out := make([]string, 0, len(tags))
+	for _, t := range tags {
+		t = strings.TrimSpace(t)
+		if t == "" {
+			continue
+		}
+		if _, ok := seen[t]; ok {
+			continue
+		}
+		seen[t] = struct{}{}
+		out = append(out, t)
+	}
+	return out
 }
 
 // TTL defaults from SPEC §5.2
@@ -161,3 +251,5 @@ const (
 	TTLMaintenance  = 30 * time.Second
 	TTLTaskTerminal = 1 * time.Hour
 )
+
+const TagServers = "servers"

@@ -1,8 +1,7 @@
 package cmd
 
 import (
-	"context"
-
+	"fmt"
 	"github.com/brandonkramer/netcup-cli/internal/output"
 	"github.com/spf13/cobra"
 )
@@ -18,6 +17,7 @@ func newAuthLoginCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use:   "login",
 		Short: "Log in via OAuth device code",
+		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			app.Out.Command = "auth.login"
 			creds, err := app.Auth.Login(cmd.Context(), !noBrowser, !noSave)
@@ -41,6 +41,7 @@ func newAuthLogoutCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use:   "logout",
 		Short: "Remove local credentials",
+		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			app.Out.Command = "auth.logout"
 			if err := app.Auth.Logout(revoke); err != nil {
@@ -57,6 +58,7 @@ func newAuthStatusCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "status",
 		Short: "Show login status",
+		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			app.Out.Command = "auth.status"
 			st, err := app.Auth.Status(cmd.Context())
@@ -84,18 +86,22 @@ func newAuthWhoamiCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "whoami",
 		Short: "GET current user profile",
+		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			app.Out.Command = "auth.whoami"
 			if err := app.EnsureClient(cmd.Context()); err != nil {
 				return err
 			}
-			uid, err := app.ResolveUserID()
+			uid, err := app.ResolveUserID(cmd.Context())
 			if err != nil {
 				return err
 			}
 			resp, err := app.Client.GetApiV1UsersUserIdWithResponse(cmd.Context(), uid)
 			if err != nil {
 				return err
+			}
+			if resp == nil {
+				return fmt.Errorf("auth.whoami: empty response")
 			}
 			if resp.StatusCode() != 200 || resp.JSON200 == nil {
 				return app.HandleAPIError("auth.whoami", resp.StatusCode(), resp.Body)
@@ -109,9 +115,10 @@ func newAuthRefreshCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "refresh",
 		Short: "Force access token refresh",
+		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			app.Out.Command = "auth.refresh"
-			tok, err := app.Auth.Refresh(context.Background())
+			tok, err := app.Auth.Refresh(cmd.Context())
 			if err != nil {
 				return app.Out.Fail(output.ExitAuth, "auth", "", err.Error(), 0, nil)
 			}

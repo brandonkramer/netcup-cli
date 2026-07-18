@@ -24,30 +24,30 @@ const (
 )
 
 type CacheMeta struct {
-	Key    string `json:"key"`
-	AgeMS  int64  `json:"age_ms"`
-	TTLMS  int64  `json:"ttl_ms"`
-	Stale  bool   `json:"stale"`
+	Key   string `json:"key" yaml:"key"`
+	AgeMS int64  `json:"age_ms" yaml:"age_ms"`
+	TTLMS int64  `json:"ttl_ms" yaml:"ttl_ms"`
+	Stale bool   `json:"stale" yaml:"stale"`
 }
 
 type Envelope struct {
-	OK         bool            `json:"ok"`
-	Command    string          `json:"command,omitempty"`
-	HTTPStatus int             `json:"http_status,omitempty"`
-	Cached     bool            `json:"cached,omitempty"`
-	Cache      *CacheMeta      `json:"cache,omitempty"`
-	TookMS     int64           `json:"took_ms,omitempty"`
-	Data       any             `json:"data"`
-	Task       any             `json:"task"`
-	Warnings   []string        `json:"warnings,omitempty"`
-	Error      *ErrorBody      `json:"error,omitempty"`
+	OK         bool       `json:"ok" yaml:"ok"`
+	Command    string     `json:"command,omitempty" yaml:"command,omitempty"`
+	HTTPStatus int        `json:"http_status,omitempty" yaml:"http_status,omitempty"`
+	Cached     bool       `json:"cached,omitempty" yaml:"cached,omitempty"`
+	Cache      *CacheMeta `json:"cache,omitempty" yaml:"cache,omitempty"`
+	TookMS     int64      `json:"took_ms,omitempty" yaml:"took_ms,omitempty"`
+	Data       any        `json:"data" yaml:"data"`
+	Task       any        `json:"task" yaml:"task"`
+	Warnings   []string   `json:"warnings,omitempty" yaml:"warnings,omitempty"`
+	Error      *ErrorBody `json:"error,omitempty" yaml:"error,omitempty"`
 }
 
 type ErrorBody struct {
-	Type    string   `json:"type"`
-	Code    string   `json:"code,omitempty"`
-	Message string   `json:"message"`
-	Fields  []any    `json:"fields,omitempty"`
+	Type    string `json:"type" yaml:"type"`
+	Code    string `json:"code,omitempty" yaml:"code,omitempty"`
+	Message string `json:"message" yaml:"message"`
+	Fields  []any  `json:"fields,omitempty" yaml:"fields,omitempty"`
 }
 
 type Printer struct {
@@ -61,7 +61,11 @@ type Printer struct {
 }
 
 func NewPrinter(format string) *Printer {
-	f := resolveFormat(format)
+	f, err := resolveFormat(format)
+	if err != nil {
+		// Defer hard failure to Init/PersistentPreRun validation; default to table.
+		f = FormatTable
+	}
 	return &Printer{
 		Out:     os.Stdout,
 		Err:     os.Stderr,
@@ -70,18 +74,30 @@ func NewPrinter(format string) *Printer {
 	}
 }
 
-func resolveFormat(explicit string) Format {
+// ParseFormat validates an explicit format string.
+func ParseFormat(s string) (Format, error) {
+	switch Format(strings.ToLower(strings.TrimSpace(s))) {
+	case FormatTable, FormatJSON, FormatJSONL, FormatYAML, FormatBrief:
+		return Format(strings.ToLower(strings.TrimSpace(s))), nil
+	case "":
+		return "", fmt.Errorf("output format is required")
+	default:
+		return "", fmt.Errorf("invalid --format %q (want table|json|jsonl|yaml|brief)", s)
+	}
+}
+
+func resolveFormat(explicit string) (Format, error) {
 	if explicit != "" {
-		return Format(strings.ToLower(explicit))
+		return ParseFormat(explicit)
 	}
 	if v := os.Getenv("NETCUP_FORMAT"); v != "" {
-		return Format(strings.ToLower(v))
+		return ParseFormat(v)
 	}
 	fi, err := os.Stdout.Stat()
 	if err == nil && (fi.Mode()&os.ModeCharDevice) == 0 {
-		return FormatJSON
+		return FormatJSON, nil
 	}
-	return FormatTable
+	return FormatTable, nil
 }
 
 func (p *Printer) TookMS() int64 {
@@ -134,6 +150,13 @@ func (p *Printer) writeSuccess(env Envelope, data any) error {
 }
 
 func (p *Printer) Fail(exitCode int, errType, code, message string, httpStatus int, fields []any) error {
+	_ = p.WriteError(exitCode, errType, code, message, httpStatus, fields)
+	return &ExitError{Code: exitCode, Message: message, Rendered: true}
+}
+
+// WriteError renders a failure envelope in the selected format (no return ExitError).
+func (p *Printer) WriteError(exitCode int, errType, code, message string, httpStatus int, fields []any) error {
+	_ = exitCode
 	env := Envelope{
 		OK:         false,
 		Command:    p.Command,
@@ -149,13 +172,18 @@ func (p *Printer) Fail(exitCode int, errType, code, message string, httpStatus i
 		},
 	}
 	switch p.Format {
-	case FormatJSON, FormatJSONL, FormatYAML:
-		_ = p.writeJSON(env)
+	case FormatJSON:
+		return p.writeJSON(env)
+	case FormatJSONL:
+		enc := json.NewEncoder(p.Out)
+		return enc.Encode(env)
+	case FormatYAML:
+		return yaml.NewEncoder(p.Out).Encode(env)
 	default:
 		style := lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
 		fmt.Fprintln(p.Err, style.Render("Error: "+message))
+		return nil
 	}
-	return Exit(exitCode, message)
 }
 
 func (p *Printer) writeJSON(v any) error {

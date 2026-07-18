@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"github.com/brandonkramer/netcup-cli/internal/output"
 	"github.com/brandonkramer/netcup-cli/internal/scpclient"
 	"github.com/spf13/cobra"
@@ -37,6 +38,9 @@ func newSnapshotsListCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if resp == nil {
+				return fmt.Errorf("snapshots.list: empty response")
+			}
 			if resp.StatusCode() != 200 {
 				return app.HandleAPIError("snapshots.list", resp.StatusCode(), resp.Body)
 			}
@@ -63,6 +67,9 @@ func newSnapshotsGetCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if resp == nil {
+				return fmt.Errorf("snapshots.get: empty response")
+			}
 			if resp.StatusCode() != 200 {
 				return app.HandleAPIError("snapshots.get", resp.StatusCode(), resp.Body)
 			}
@@ -72,7 +79,7 @@ func newSnapshotsGetCmd() *cobra.Command {
 }
 
 func newSnapshotsCreateCmd() *cobra.Command {
-		var name, disk, description string
+	var name, disk, description string
 	var online bool
 	c := &cobra.Command{
 		Use:  "create [selector]",
@@ -99,6 +106,9 @@ func newSnapshotsCreateCmd() *cobra.Command {
 			resp, err := app.Client.PostApiV1ServersServerIdSnapshotsWithResponse(cmd.Context(), id, body)
 			if err != nil {
 				return err
+			}
+			if resp == nil {
+				return fmt.Errorf("snapshots.create: empty response")
 			}
 			return handleTaskResp(cmd.Context(), "snapshots.create", resp.StatusCode(), firstTask(resp.HALJSON202, resp.JSON202), resp.Body)
 		},
@@ -128,6 +138,9 @@ func newSnapshotsDryRunCmd() *cobra.Command {
 			resp, err := app.Client.PostApiV1ServersServerIdSnapshotsDryrunWithResponse(cmd.Context(), id, body)
 			if err != nil {
 				return err
+			}
+			if resp == nil {
+				return fmt.Errorf("snapshots.dry-run: empty response")
 			}
 			if resp.StatusCode() != 200 && resp.StatusCode() != 204 {
 				return app.HandleAPIError("snapshots.dry-run", resp.StatusCode(), resp.Body)
@@ -162,6 +175,9 @@ func newSnapshotsDeleteCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if resp == nil {
+				return fmt.Errorf("snapshots.delete: empty response")
+			}
 			return handleTaskResp(cmd.Context(), "snapshots.delete", resp.StatusCode(), firstTask(resp.HALJSON202, resp.JSON202), resp.Body)
 		},
 	}
@@ -184,6 +200,9 @@ func newSnapshotsExportCmd() *cobra.Command {
 			resp, err := app.Client.PostApiV1ServersServerIdSnapshotsNameExportWithResponse(cmd.Context(), id, name)
 			if err != nil {
 				return err
+			}
+			if resp == nil {
+				return fmt.Errorf("snapshots.export: empty response")
 			}
 			return handleTaskResp(cmd.Context(), "snapshots.export", resp.StatusCode(), firstTask(resp.HALJSON202, resp.JSON202), resp.Body)
 		},
@@ -210,6 +229,9 @@ func newSnapshotsRevertCmd() *cobra.Command {
 			resp, err := app.Client.PostApiV1ServersServerIdSnapshotsNameRevertWithResponse(cmd.Context(), id, name)
 			if err != nil {
 				return err
+			}
+			if resp == nil {
+				return fmt.Errorf("snapshots.revert: empty response")
 			}
 			return handleTaskResp(cmd.Context(), "snapshots.revert", resp.StatusCode(), firstTask(resp.HALJSON202, resp.JSON202), resp.Body)
 		},

@@ -20,11 +20,20 @@ type tabKind int
 const (
 	tabServers tabKind = iota
 	tabTasks
-	tabMetrics
+	tabSnapshots
+	tabDisks
+	tabFirewall
 	tabMedia
+	tabNetwork
+	tabAccount
 )
 
-var tabNames = []string{"Servers", "Tasks", "Metrics", "Media"}
+var tabNames = []string{"Servers", "Tasks", "Snapshots", "Disks", "Firewall", "Media", "Network", "Account"}
+
+type serverContext struct {
+	ID   int32
+	Name string
+}
 
 type confirmState struct {
 	action string
@@ -34,8 +43,9 @@ type confirmState struct {
 }
 
 type editMode struct {
-	attr  string // hostname | nickname
-	input textinput.Model
+	attr    string
+	context string
+	input   textinput.Model
 }
 
 type model struct {
@@ -44,23 +54,31 @@ type model struct {
 
 	tab tabKind
 
-	serversList list.Model
-	tasksList   list.Model
-	mediaList   list.Model
-	viewport    viewport.Model
-	spinner     spinner.Model
+	serversList   list.Model
+	tasksList     list.Model
+	snapshotsList list.Model
+	disksList     list.Model
+	firewallList  list.Model
+	mediaList     list.Model
+	networkList   list.Model
+	accountList   list.Model
+	viewport      viewport.Model
+	spinner       spinner.Model
 
 	loading bool
 	detail  *scpclient.Server
+	server  serverContext
 	guest   any
 	jobs    []job
 	confirm *confirmState
 	edit    *editMode
 
-	metricsKind  string
-	metricsHours int32
-	metricsData  any
-	mediaAttached any
+	metricsKind    string // Servers sub-view, never a top tab.
+	metricsHours   int32
+	metricsData    any
+	mediaAttached  any
+	resourceDetail string
+	resourceMode   string
 
 	status   string
 	errMsg   string
@@ -69,46 +87,56 @@ type model struct {
 	bodyH    int // allocated body rows (panels sized to this)
 	ready    bool
 	deadline time.Time
+
+	authGate   bool
+	authReason string
+	deviceURL  string
+	deviceCode string
+	health     healthMsg
 }
 
 func newModel(ctx context.Context, deps Deps) model {
 	delegate := list.NewDefaultDelegate()
 	delegate.ShowDescription = true
-	delegate.Styles.SelectedTitle = delegate.Styles.SelectedTitle.
-		Foreground(colAccent).BorderForeground(colAccent)
-	delegate.Styles.SelectedDesc = delegate.Styles.SelectedDesc.
-		Foreground(colMuted).BorderForeground(colAccent)
-	delegate.Styles.NormalTitle = delegate.Styles.NormalTitle.Foreground(colValue)
-	delegate.Styles.NormalDesc = delegate.Styles.NormalDesc.Foreground(colMuted)
+	delegate.Styles.SelectedTitle = lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder(), false, false, false, true).
+		BorderForeground(colAccent).
+		Foreground(colAccent).
+		Bold(true).
+		Padding(0, 0, 0, 1)
+	delegate.Styles.SelectedDesc = lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder(), false, false, false, true).
+		BorderForeground(colAccent).
+		Foreground(colMuted).
+		Padding(0, 0, 0, 1)
+	delegate.Styles.NormalTitle = lipgloss.NewStyle().Foreground(colValue).Padding(0, 0, 0, 2)
+	delegate.Styles.NormalDesc = lipgloss.NewStyle().Foreground(colMuted).Padding(0, 0, 0, 2)
+
+	styleList := func(l *list.Model, title string) {
+		l.Title = title
+		l.SetShowStatusBar(false)
+		l.SetShowPagination(false)
+		l.SetFilteringEnabled(true)
+		l.SetShowHelp(false)
+		l.DisableQuitKeybindings()
+		l.Styles.Title = styleAppTitle
+		l.Styles.TitleBar = lipgloss.NewStyle().Padding(0, 0, 1, 0)
+		l.Styles.FilterPrompt = styleFocus
+		l.Styles.FilterCursor = styleFocus
+	}
 
 	servers := list.New([]list.Item{}, delegate, 0, 0)
-	servers.Title = "Servers"
-	servers.SetShowStatusBar(false)
-	servers.SetShowPagination(false)
-	servers.SetFilteringEnabled(true)
-	servers.SetShowHelp(false)
-	servers.DisableQuitKeybindings()
-	servers.Styles.Title = styleAppTitle
-	servers.Styles.FilterPrompt = styleFocus
-	servers.Styles.FilterCursor = styleFocus
+	styleList(&servers, "Servers")
 
 	tasks := list.New([]list.Item{}, delegate, 0, 0)
-	tasks.Title = "Tasks"
-	tasks.SetShowStatusBar(false)
-	tasks.SetShowPagination(false)
-	tasks.SetFilteringEnabled(true)
-	tasks.SetShowHelp(false)
-	tasks.DisableQuitKeybindings()
-	tasks.Styles.Title = styleAppTitle
+	styleList(&tasks, "Tasks")
 
-	media := list.New([]list.Item{}, delegate, 0, 0)
-	media.Title = "Media"
-	media.SetShowStatusBar(false)
-	media.SetShowPagination(false)
-	media.SetFilteringEnabled(true)
-	media.SetShowHelp(false)
-	media.DisableQuitKeybindings()
-	media.Styles.Title = styleAppTitle
+	newList := func(title string) list.Model {
+		l := list.New([]list.Item{}, delegate, 0, 0)
+		styleList(&l, title)
+		return l
+	}
+	media := newList("Media")
 
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
@@ -117,18 +145,23 @@ func newModel(ctx context.Context, deps Deps) model {
 	vp := viewport.New(0, 0)
 
 	return model{
-		ctx:          ctx,
-		deps:         deps,
-		tab:          tabServers,
-		serversList:  servers,
-		tasksList:    tasks,
-		mediaList:    media,
-		viewport:     vp,
-		spinner:      sp,
-		loading:      true,
-		metricsKind:  "cpu",
-		metricsHours: 24,
-		status:       "loading servers…",
+		ctx:           ctx,
+		deps:          deps,
+		tab:           tabServers,
+		serversList:   servers,
+		tasksList:     tasks,
+		snapshotsList: newList("Snapshots"),
+		disksList:     newList("Disks"),
+		firewallList:  newList("Firewall"),
+		mediaList:     media,
+		networkList:   newList("Network"),
+		accountList:   newList("Account"),
+		viewport:      vp,
+		spinner:       sp,
+		loading:       true,
+		metricsKind:   "cpu",
+		metricsHours:  24,
+		status:        "loading servers…",
 	}
 }
 
@@ -137,7 +170,11 @@ func teaProgram(m model) *tea.Program {
 }
 
 func (m model) Init() tea.Cmd {
-	return tea.Batch(m.spinner.Tick, loadServersCmd(m.ctx, m.deps.Client))
+	cmds := []tea.Cmd{m.spinner.Tick, loadHealthCmd(m.ctx, m.deps), checkSessionCmd(m.ctx, m.deps)}
+	if !m.authGate && m.deps.Client != nil {
+		cmds = append(cmds, loadServersCmd(m.ctx, m.deps, false))
+	}
+	return tea.Batch(cmds...)
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -155,36 +192,69 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 
 	case serversLoadedMsg:
-		return m.onServersLoaded(msg)
+		mod, cmd := m.onServersLoaded(msg)
+		return applyAuthGate(mod, cmd, msg.err)
 	case detailLoadedMsg:
-		return m.onDetailLoaded(msg)
+		mod, cmd := m.onDetailLoaded(msg)
+		return applyAuthGate(mod, cmd, msg.err)
 	case guestAgentMsg:
 		if msg.err != nil {
 			m.errMsg = msg.err.Error()
-		} else {
-			m.guest = msg.status
+			return m.withAuthGate(msg.err), nil
 		}
+		m.guest = msg.status
 		return m, nil
 	case powerStartedMsg:
-		return m.onPowerStarted(msg)
+		mod, cmd := m.onPowerStarted(msg)
+		return applyAuthGate(mod, cmd, msg.err)
 	case jobsPolledMsg:
-		return m.onJobsPolled(msg)
+		mod, cmd := m.onJobsPolled(msg)
+		return applyAuthGate(mod, cmd, msg.err)
 	case tasksLoadedMsg:
-		return m.onTasksLoaded(msg)
+		mod, cmd := m.onTasksLoaded(msg)
+		return applyAuthGate(mod, cmd, msg.err)
 	case taskCancelMsg:
-		return m.onTaskCancel(msg)
+		mod, cmd := m.onTaskCancel(msg)
+		return applyAuthGate(mod, cmd, msg.err)
 	case metricsLoadedMsg:
-		return m.onMetricsLoaded(msg)
+		mod, cmd := m.onMetricsLoaded(msg)
+		return applyAuthGate(mod, cmd, msg.err)
 	case mediaLoadedMsg:
-		return m.onMediaLoaded(msg)
+		mod, cmd := m.onMediaLoaded(msg)
+		return applyAuthGate(mod, cmd, msg.err)
 	case isoActionMsg:
-		return m.onISOAction(msg)
+		mod, cmd := m.onISOAction(msg)
+		return applyAuthGate(mod, cmd, msg.err)
 	case attrSetMsg:
-		return m.onAttrSet(msg)
+		mod, cmd := m.onAttrSet(msg)
+		return applyAuthGate(mod, cmd, msg.err)
 	case rescueMsg:
-		return m.onRescue(msg)
+		mod, cmd := m.onRescue(msg)
+		return applyAuthGate(mod, cmd, msg.err)
+	case resourceLoadedMsg:
+		mod, cmd := m.onResourceLoaded(msg)
+		return applyAuthGate(mod, cmd, msg.err)
+	case resourceActionMsg:
+		mod, cmd := m.onResourceAction(msg)
+		return applyAuthGate(mod, cmd, msg.err)
+	case authGateMsg:
+		if !msg.ok {
+			m.authGate = true
+			m.authReason = msg.reason
+			m.loading = false
+		}
+		return m, nil
+	case deviceLoginPromptMsg:
+		return m.onDeviceLoginPrompt(msg)
+	case sessionReadyMsg:
+		return m.onSessionReady(msg)
+	case healthMsg:
+		return m.onHealth(msg)
 
 	case tea.KeyMsg:
+		if m.authGate {
+			return m.handleAuthGateKey(msg)
+		}
 		if m.edit != nil {
 			return m.handleEditKey(msg)
 		}
@@ -200,9 +270,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "2":
 			return m.switchTab(tabTasks)
 		case "3":
-			return m.switchTab(tabMetrics)
+			return m.switchTab(tabSnapshots)
 		case "4":
+			return m.switchTab(tabDisks)
+		case "5":
+			return m.switchTab(tabFirewall)
+		case "6":
 			return m.switchTab(tabMedia)
+		case "7":
+			return m.switchTab(tabNetwork)
+		case "8":
+			return m.switchTab(tabAccount)
 		case "tab":
 			return m.switchTab((m.tab + 1) % tabKind(len(tabNames)))
 		case "shift+tab":
@@ -217,10 +295,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateServersKeys(msg)
 		case tabTasks:
 			return m.updateTasksKeys(msg)
-		case tabMetrics:
-			return m.updateMetricsKeys(msg)
+		case tabSnapshots:
+			return m.updateSnapshotsKeys(msg)
+		case tabDisks:
+			return m.updateDisksKeys(msg)
+		case tabFirewall:
+			return m.updateFirewallKeys(msg)
 		case tabMedia:
 			return m.updateMediaKeys(msg)
+		case tabNetwork:
+			return m.updateNetworkKeys(msg)
+		case tabAccount:
+			return m.updateAccountKeys(msg)
 		}
 	}
 
@@ -230,6 +316,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m model) View() string {
 	if !m.ready {
 		return styleMuted.Render(" starting… ")
+	}
+	if m.authGate {
+		return m.authGateView()
 	}
 	if m.confirm != nil {
 		return m.confirmView()
@@ -247,8 +336,9 @@ func (m model) View() string {
 		bottomParts = append(bottomParts, clampLines(styleErr.Render("✗ "+m.errMsg), 1, m.width))
 	}
 	bottomParts = append(bottomParts,
+		clampLines(m.keysBarView(), 1, m.width),
+		clampLines(m.tipView(), 1, m.width),
 		clampLines(m.jobsView(), 1, m.width),
-		clampLines(m.helpView(), 1, m.width),
 		clampLines(m.statusLine(), 1, m.width),
 	)
 	bottom := lipgloss.JoinVertical(lipgloss.Left, bottomParts...)
@@ -269,10 +359,18 @@ func (m model) View() string {
 		body = m.serversView()
 	case tabTasks:
 		body = m.onePanel(m.tasksList.View())
-	case tabMetrics:
-		body = m.metricsView()
+	case tabSnapshots:
+		body = m.snapshotsView()
+	case tabDisks:
+		body = m.disksView()
+	case tabFirewall:
+		body = m.firewallView()
 	case tabMedia:
 		body = m.mediaView()
+	case tabNetwork:
+		body = m.networkView()
+	case tabAccount:
+		body = m.accountView()
 	}
 
 	out := lipgloss.JoinVertical(lipgloss.Left, top, body, bottom)
@@ -296,12 +394,23 @@ func (m model) statusLine() string {
 	return styleStatusBar.Width(m.width).Render(status)
 }
 
+func (m *model) setErr(err error, fallback string) {
+	if err == nil {
+		return
+	}
+	m.errMsg = err.Error()
+	m.status = fallback
+	if strings.Contains(m.errMsg, "HTTP 401") || strings.Contains(m.errMsg, "HTTP 403") {
+		m.status = "run netcup auth login"
+	}
+}
+
 func (m *model) layout() {
 	if m.width == 0 || m.height == 0 {
 		return
 	}
 	// Estimate body height; View() recomputes exactly after measuring chrome.
-	const tabsH, bottomLines = 2, 4 // jobs+help+status + optional err ≈ 3–4
+	const tabsH, bottomLines = 2, 5 // tabs/context + keys/tip/jobs/status
 	bodyH := m.height - tabsH - bottomLines
 	if bodyH < 4 {
 		bodyH = 4
@@ -327,7 +436,12 @@ func (m *model) layoutBodySizes() {
 	}
 	m.serversList.SetSize(listInnerW, innerH)
 	m.tasksList.SetSize(m.width-4, innerH)
+	m.snapshotsList.SetSize(listInnerW, innerH)
+	m.disksList.SetSize(listInnerW, innerH)
+	m.firewallList.SetSize(listInnerW, innerH)
 	m.mediaList.SetSize(listInnerW, innerH)
+	m.networkList.SetSize(listInnerW, innerH)
+	m.accountList.SetSize(listInnerW, innerH)
 	m.viewport.Width = detailInnerW
 	m.viewport.Height = innerH
 }
@@ -355,24 +469,16 @@ func (m model) switchTab(t tabKind) (tea.Model, tea.Cmd) {
 		m.loading = true
 		m.status = "loading tasks…"
 		return m, loadTasksCmd(m.ctx, m.deps.Client)
-	case tabMetrics:
-		id, _ := m.focusedServer()
-		if id == 0 {
+	case tabSnapshots, tabDisks, tabFirewall, tabMedia, tabNetwork:
+		if m.server.ID == 0 {
 			m.status = "select a server on Servers tab first"
 			return m, nil
 		}
 		m.loading = true
-		m.status = fmt.Sprintf("loading %s metrics…", m.metricsKind)
-		return m, loadMetricsCmd(m.ctx, m.deps.Client, id, m.metricsKind, m.metricsHours)
-	case tabMedia:
-		id, _ := m.focusedServer()
-		if id == 0 {
-			m.status = "select a server on Servers tab first"
-			return m, nil
-		}
+		return m, m.loadTabCmd(t)
+	case tabAccount:
 		m.loading = true
-		m.status = "loading media…"
-		return m, loadMediaCmd(m.ctx, m.deps.Client, id, m.deps.UserID)
+		return m, m.loadTabCmd(t)
 	}
 	return m, nil
 }
@@ -388,10 +494,18 @@ func (m model) updateActiveList(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.serversList, cmd = m.serversList.Update(msg)
 	case tabTasks:
 		m.tasksList, cmd = m.tasksList.Update(msg)
+	case tabSnapshots:
+		m.snapshotsList, cmd = m.snapshotsList.Update(msg)
+	case tabDisks:
+		m.disksList, cmd = m.disksList.Update(msg)
+	case tabFirewall:
+		m.firewallList, cmd = m.firewallList.Update(msg)
 	case tabMedia:
 		m.mediaList, cmd = m.mediaList.Update(msg)
-	case tabMetrics:
-		m.viewport, cmd = m.viewport.Update(msg)
+	case tabNetwork:
+		m.networkList, cmd = m.networkList.Update(msg)
+	case tabAccount:
+		m.accountList, cmd = m.accountList.Update(msg)
 	}
 	return m, cmd
 }
@@ -430,21 +544,18 @@ func (m model) selectedTargets() (ids []int32, names []string) {
 }
 
 func (m model) tabsView() string {
-	logo := renderLogo()
-	var tabs []string
-	for i, name := range tabNames {
-		label := fmt.Sprintf("%d %s", i+1, name)
-		if tabKind(i) == m.tab {
-			tabs = append(tabs, styleTabOn.Render(label))
-		} else {
-			tabs = append(tabs, styleTabOff.Render(label))
+	// Powerline tabs replace the old gradient logo at the top.
+	row := m.tabsBarView()
+	right := strings.TrimSpace(m.healthChip() + " " + m.serverContextChip())
+	if right != "" {
+		gap := m.width - lipgloss.Width(row) - lipgloss.Width(right)
+		if gap < 1 {
+			gap = 1
 		}
+		row = row + strings.Repeat(" ", gap) + right
 	}
-	tabBar := lipgloss.JoinHorizontal(lipgloss.Center, tabs...)
-	row := lipgloss.JoinHorizontal(lipgloss.Center, logo, "  ", tabBar)
 	row = clampLines(row, 1, m.width)
-	line := clampLines(styleMuted.Render(strings.Repeat("─", max(0, m.width))), 1, m.width)
-	return row + "\n" + line
+	return row
 }
 
 func (m model) helpView() string {
@@ -454,8 +565,8 @@ func (m model) helpView() string {
 		help = "↑↓ move · space select · / filter · s/t/r power · P/x/u hard · h/n edit · e/d rescue · R refresh · q quit"
 	case tabTasks:
 		help = "↑↓ move · / filter · c cancel · R refresh · q quit"
-	case tabMetrics:
-		help = "c/d/n/p series · h hours · R refresh · q quit"
+	case tabSnapshots:
+		help = "c create · D dry-run · r revert · d delete · x export · R refresh"
 	case tabMedia:
 		help = "↑↓ move · enter attach · D detach · R refresh · q quit"
 	}
@@ -540,18 +651,42 @@ func (m model) handleEditKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		e := m.edit
 		m.edit = nil
-		id, _ := m.focusedServer()
-		if id == 0 {
-			m.status = "no server"
+		if e.attr == "image-setup" {
+			if m.server.ID == 0 {
+				m.status = "select a server first"
+				return m, nil
+			}
+			m.confirm = &confirmState{
+				action: "image-setup",
+				ids:    []int32{m.server.ID},
+				names:  []string{m.server.Name},
+				extra:  e.input.Value(),
+			}
 			return m, nil
 		}
 		m.loading = true
 		m.status = "setting " + e.attr
-		return m, setAttrCmd(m.ctx, m.deps.Client, id, e.attr, e.input.Value())
+		return m, m.dispatchEdit(e)
 	}
 	var cmd tea.Cmd
 	m.edit.input, cmd = m.edit.input.Update(msg)
 	return m, cmd
+}
+
+func (m model) dispatchEdit(e *editMode) tea.Cmd {
+	switch e.attr {
+	case "snapshot-create":
+		return snapshotActionCmd(m.ctx, m.deps.Client, m.server.ID, "snapshot-create", e.input.Value())
+	case "disk-driver":
+		return diskActionCmd(m.ctx, m.deps.Client, m.server.ID, "disk-driver", "", e.input.Value())
+	case "firewall-set", "policy-create", "policy-update", "rdns-set", "rdns-get", "rdns-delete", "ssh-add", "iso-upload", "image-upload", "failover-route", "nic-create", "vlan-rename":
+		return resourceEditCmd(m.ctx, m.deps.Client, m.deps.UserID, m.server.ID, e.attr, e.input.Value(), e.context)
+	default:
+		if m.server.ID == 0 {
+			return nil
+		}
+		return setAttrCmd(m.ctx, m.deps.Client, m.server.ID, e.attr, e.input.Value())
+	}
 }
 
 func (m model) dispatchConfirm(c *confirmState) tea.Cmd {
@@ -570,6 +705,16 @@ func (m model) dispatchConfirm(c *confirmState) tea.Cmd {
 		return isoDetachCmd(m.ctx, m.deps.Client, c.ids[0])
 	case "task-cancel":
 		return cancelTaskCmd(m.ctx, m.deps.Client, c.extra)
+	case "snapshot-delete", "snapshot-revert":
+		return snapshotActionCmd(m.ctx, m.deps.Client, c.ids[0], c.action, c.extra)
+	case "disk-format":
+		return diskActionCmd(m.ctx, m.deps.Client, c.ids[0], c.action, c.extra, "")
+	case "firewall-reapply", "firewall-restore", "policy-delete", "iso-delete", "image-delete", "ssh-delete", "nic-delete", "image-setup-user", "policy-preset-ssh", "policy-preset-http":
+		return resourceConfirmCmd(m.ctx, m.deps.Client, m.deps.UserID, m.server.ID, c.action, c.extra)
+	case "storage-optimize":
+		return storageOptimizeCmd(m.ctx, m.deps.Client, c.ids[0])
+	case "image-setup":
+		return imageSetupCmd(m.ctx, m.deps.Client, m.server.ID, c.extra)
 	default:
 		return nil
 	}

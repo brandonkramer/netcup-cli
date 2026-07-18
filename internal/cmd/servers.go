@@ -48,10 +48,8 @@ func newServersListCmd() *cobra.Command {
 			if err := app.EnsureClient(cmd.Context()); err != nil {
 				return err
 			}
-			uid, _ := app.ResolveUserID()
-			ck := cache.Key("GET", "/api/v1/servers",
-				fmt.Sprintf("%s|%s|%s|%v|%d|%d|%d", q, name, ip, sortBy, limit, offset, firewallPolicyID),
-				fmt.Sprint(uid))
+			uid, _ := app.ResolveUserID(cmd.Context())
+			ck := cache.ServersListKey(fmt.Sprint(uid), q, name, ip, sortBy, limit, offset, firewallPolicyID)
 			if body, age, ttl, ok := app.Cache.Get(ck); ok {
 				var list []scpclient.ServerListMinimal
 				if err := json.Unmarshal(body, &list); err == nil {
@@ -86,6 +84,9 @@ func newServersListCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if resp == nil {
+				return fmt.Errorf("servers.list: empty response")
+			}
 			if resp.StatusCode() != 200 {
 				return app.HandleAPIError("servers.list", resp.StatusCode(), resp.Body)
 			}
@@ -97,7 +98,7 @@ func newServersListCmd() *cobra.Command {
 			if app.Flags.CacheTTL > 0 {
 				ttl = app.Flags.CacheTTL
 			}
-			_ = app.Cache.Put(ck, list, ttl)
+			_ = app.Cache.Put(ck, list, ttl, cache.TagServers)
 			td := serversTable(list)
 			return app.Out.Success(successData(app.Out.Format, td), output.WithHTTPStatus(200))
 		},
@@ -180,11 +181,14 @@ func newServersPowerCmd(name string, state scpclient.ServerState1, stateOpt *str
 			if err != nil {
 				return err
 			}
+			if resp == nil {
+				return fmt.Errorf("%s: empty response", command)
+			}
 			task, err := patch.RequireOK(resp)
 			if err != nil {
 				return app.HandleAPIError(command, resp.StatusCode(), resp.Body)
 			}
-			app.Cache.BustTags("servers")
+			app.Cache.BustTags(cache.TagServers)
 			if task != nil {
 				task, err = wait.Task(cmd.Context(), app.Client, *task, app.WaitOpts())
 				if err != nil {
@@ -242,18 +246,7 @@ func newServersSetCmd() *cobra.Command {
 				})
 			},
 		},
-		&cobra.Command{
-			Use:  "root-password <value> [selector]",
-			Args: cobra.RangeArgs(1, 2),
-			RunE: func(cmd *cobra.Command, args []string) error {
-				if err := app.Confirm("set root password"); err != nil {
-					return err
-				}
-				return serverSet(cmd, args, "root-password", func(id int32, val string) (*scpclient.PatchApiV1ServersServerIdResponse, error) {
-					return patch.SetRootPassword(cmd.Context(), app.Client, id, val)
-				})
-			},
-		},
+		newServersSetRootPasswordCmd(),
 		&cobra.Command{
 			Use:  "autostart <true|false> [selector]",
 			Args: cobra.RangeArgs(1, 2),
@@ -293,6 +286,63 @@ func newServersSetCmd() *cobra.Command {
 	return cmd
 }
 
+func newServersSetRootPasswordCmd() *cobra.Command {
+	var passwordFile string
+	c := &cobra.Command{
+		Use:   "root-password [selector]",
+		Short: "Set server root password (prompt or --password-file)",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := app.Confirm("set root password"); err != nil {
+				return err
+			}
+			secret, err := readSecret("Root password: ", passwordFile)
+			if err != nil {
+				return err
+			}
+			command := "servers.set.root-password"
+			app.Out.Command = command
+			if err := app.EnsureClient(cmd.Context()); err != nil {
+				return err
+			}
+			sel := app.Flags.Server
+			if len(args) > 0 {
+				sel = args[0]
+			}
+			id, _, err := selectserver.Resolve(cmd.Context(), app.Client, sel)
+			if err != nil {
+				return err
+			}
+			resp, err := patch.SetRootPassword(cmd.Context(), app.Client, id, secret)
+			if err != nil {
+				return err
+			}
+			if resp == nil {
+				return fmt.Errorf("%s: empty response", command)
+			}
+			task, err := patch.RequireOK(resp)
+			if err != nil {
+				return app.HandleAPIError(command, resp.StatusCode(), resp.Body)
+			}
+			app.Cache.BustTags(cache.TagServers)
+			if task != nil {
+				task, err = wait.Task(cmd.Context(), app.Client, *task, app.WaitOpts())
+				if err != nil {
+					_ = emitTaskResult(command, 202, task, nil)
+					return err
+				}
+			}
+			return emitTaskResult(command, resp.StatusCode(), task, map[string]any{
+				"server_id": id,
+				"attribute": "root-password",
+				"value":     "[redacted]",
+			})
+		},
+	}
+	c.Flags().StringVar(&passwordFile, "password-file", "", "read password from file (use - for stdin)")
+	return c
+}
+
 func serverSet(cmd *cobra.Command, args []string, attr string, fn func(int32, string) (*scpclient.PatchApiV1ServersServerIdResponse, error)) error {
 	command := "servers.set." + attr
 	app.Out.Command = command
@@ -312,11 +362,14 @@ func serverSet(cmd *cobra.Command, args []string, attr string, fn func(int32, st
 	if err != nil {
 		return err
 	}
+	if resp == nil {
+		return fmt.Errorf("%s: empty response", command)
+	}
 	task, err := patch.RequireOK(resp)
 	if err != nil {
 		return app.HandleAPIError(command, resp.StatusCode(), resp.Body)
 	}
-	app.Cache.BustTags("servers")
+	app.Cache.BustTags(cache.TagServers)
 	if task != nil {
 		task, err = wait.Task(cmd.Context(), app.Client, *task, app.WaitOpts())
 		if err != nil {
@@ -358,11 +411,14 @@ func serverSetCpuTopology(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	if resp == nil {
+		return fmt.Errorf("%s: empty response", command)
+	}
 	task, err := patch.RequireOK(resp)
 	if err != nil {
 		return app.HandleAPIError(command, resp.StatusCode(), resp.Body)
 	}
-	app.Cache.BustTags("servers")
+	app.Cache.BustTags(cache.TagServers)
 	if task != nil {
 		task, err = wait.Task(cmd.Context(), app.Client, *task, app.WaitOpts())
 		if err != nil {
@@ -426,6 +482,9 @@ func serverRescue(cmd *cobra.Command, args []string, action string) error {
 		if err != nil {
 			return err
 		}
+		if resp == nil {
+			return fmt.Errorf("%s: empty response", command)
+		}
 		if resp.StatusCode() != 200 {
 			return app.HandleAPIError(command, resp.StatusCode(), resp.Body)
 		}
@@ -435,11 +494,17 @@ func serverRescue(cmd *cobra.Command, args []string, action string) error {
 		if err != nil {
 			return err
 		}
+		if resp == nil {
+			return fmt.Errorf("%s: empty response", command)
+		}
 		return handleTaskResp(cmd.Context(), command, resp.StatusCode(), firstTask(resp.HALJSON202, resp.JSON202), resp.Body)
 	case "disable":
 		resp, err := app.Client.DeleteApiV1ServersServerIdRescuesystemWithResponse(cmd.Context(), id)
 		if err != nil {
 			return err
+		}
+		if resp == nil {
+			return fmt.Errorf("%s: empty response", command)
 		}
 		return handleTaskResp(cmd.Context(), command, resp.StatusCode(), firstTask(resp.HALJSON202, resp.JSON202), resp.Body)
 	}
@@ -448,7 +513,7 @@ func serverRescue(cmd *cobra.Command, args []string, action string) error {
 
 func handleTaskResp(ctx context.Context, command string, status int, task *scpclient.TaskInfo, body []byte) error {
 	task = taskFromBody(status, body, task)
-	app.Cache.BustTags("servers")
+	app.Cache.BustTags(cache.TagServers)
 	if status != 202 && status != 200 && status != 204 {
 		return app.HandleAPIError(command, status, body)
 	}
@@ -490,6 +555,9 @@ func newServersGPUDriverCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if resp == nil {
+				return fmt.Errorf("servers.gpu-driver: empty response")
+			}
 			if resp.StatusCode() != 200 {
 				return app.HandleAPIError("servers.gpu-driver", resp.StatusCode(), resp.Body)
 			}
@@ -516,6 +584,9 @@ func newServersGuestAgentCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if resp == nil {
+				return fmt.Errorf("servers.guest-agent.status: empty response")
+			}
 			if resp.StatusCode() != 200 {
 				return app.HandleAPIError("servers.guest-agent.status", resp.StatusCode(), resp.Body)
 			}
@@ -534,6 +605,9 @@ func newServersGuestAgentCmd() *cobra.Command {
 		resp, err := app.Client.GetApiV1ServersServerIdGuestAgentWithResponse(cmd.Context(), id)
 		if err != nil {
 			return err
+		}
+		if resp == nil {
+			return fmt.Errorf("servers.guest-agent: empty response")
 		}
 		if resp.StatusCode() != 200 {
 			return app.HandleAPIError("servers.guest-agent", resp.StatusCode(), resp.Body)
@@ -568,6 +642,9 @@ func newServersLogsCmd() *cobra.Command {
 			resp, err := app.Client.GetApiV1ServersServerIdLogsWithResponse(cmd.Context(), id, params)
 			if err != nil {
 				return err
+			}
+			if resp == nil {
+				return fmt.Errorf("servers.logs: empty response")
 			}
 			if resp.StatusCode() != 200 {
 				return app.HandleAPIError("servers.logs", resp.StatusCode(), resp.Body)
@@ -606,6 +683,9 @@ func newServersStorageOptimizeCmd() *cobra.Command {
 			resp, err := app.Client.PostApiV1ServersServerIdStorageoptimizationWithResponse(cmd.Context(), id, params)
 			if err != nil {
 				return err
+			}
+			if resp == nil {
+				return fmt.Errorf("servers.storage-optimize: empty response")
 			}
 			return handleTaskResp(cmd.Context(), "servers.storage-optimize", resp.StatusCode(), firstTask(resp.HALJSON202, resp.JSON202), resp.Body)
 		},

@@ -2,8 +2,6 @@
 
 Go CLI for the netcup **SCP (Server Control Panel) REST API**.
 
-Not affiliated with netcup. CCP billing/orders are out of scope.
-
 ## Install
 
 ```bash
@@ -29,7 +27,7 @@ netcup servers get -s <id|name|nickname|ip>
 netcup servers start -s <selector>
 ```
 
-On an interactive TTY, bare `netcup` (no subcommand) opens the ops TUI (servers, tasks, metrics, media). Same via `netcup tui`. Non-TTY / piped use still shows help; scripting stays on subcommands.
+On an interactive TTY, bare `netcup` (no subcommand) opens the ops TUI (servers, tasks, snapshots, disks, firewall, media, network, account). Same via `netcup tui`. Non-TTY / piped use still shows help; scripting stays on subcommands.
 
 Config and credentials live under `~/.config/netcup` (override with `--config-dir` / `NETCUP_CONFIG_DIR`). Profiles use `--profile` / `NETCUP_PROFILE` (default `default`).
 
@@ -101,14 +99,18 @@ netcup spec mcp             # docs MCP proxy
 netcup completion bash|zsh|fish|powershell
 ```
 
-**TUI:** tabs `1` Servers · `2` Tasks · `3` Metrics · `4` Media (or `tab`).
+**TUI:** tabs `1` Servers · `2` Tasks · `3` Snapshots · `4` Disks · `5` Firewall · `6` Media · `7` Network · `8` Account (or `tab`). Opens without credentials and shows an auth gate (`l` device login, `r` retry). Top chrome includes an SCP ping/maintenance chip. The powerline bottom bar shows the active keys, jobs, and a contextual tip. A selected server is carried into server-scoped tabs; `m` opens metrics as a Servers sub-view.
 
 | Tab | Keys |
 |-----|------|
-| Servers | `j/k` · `space` multi-select · `/` filter · `enter` detail · `s/t/r` start/stop/reboot · `P` poweroff · `x` reset · `u` suspend · `h`/`n` edit hostname/nickname · `g` guest agent · `e`/`d` rescue enable/disable · `R` refresh · `a` clear |
+| Servers | `j/k` · `space` multi-select · `/` filter · `enter` reload detail · `pgup`/`pgdn` detail scroll · `s/t/r` start/stop/reboot · `P` poweroff · `x` reset · `u` suspend · `h`/`n` hostname/nickname · `A` autostart · `U` UEFI · `b` boot order · `K` keyboard · `g` guest agent · `e`/`d` rescue enable/disable · `m` metrics · `L` logs · `O` storage optimize · `G` GPU driver · `y` copy id · `R` refresh · `a` clear |
 | Tasks | `c` cancel · `R` refresh |
-| Metrics | `c/d/n/p` cpu/disk/network/packets · `h` cycle hours · `R` refresh |
-| Media | `enter` attach (+boot CDROM) · `D` detach · `R` refresh |
+| Snapshots | `enter` detail · `c` create · `D` dry-run · `r` revert · `d` delete · `x` export · `R` refresh |
+| Disks | `enter` detail · `v` supported drivers · `s` set driver · `f` format (confirm) · `R` refresh |
+| Firewall | `enter` get selected MAC/policy · `r` reapply · `c` restore copied policies · `s` assign JSON to MAC · `S`/`H` create SSH/HTTP policy presets (library only; not applied) · `p` policies · `n` create policy · `e` update policy · `d` delete policy |
+| Media | `enter` attach (+boot CDROM) · `D` detach · `u`/`i` upload ISO/image path · `F` flavours · `S` image setup (JSON/`@file`, confirm) · `U` setup-user on selected image · `d` delete · `R` refresh |
+| Network | NICs, failover IPv4/IPv6, VLANs · `enter` detail · `c` create VLAN NIC (`vlanId [driver]`) · `e` rename VLAN · `d` delete NIC · `r` set rDNS · `g` get rDNS · `x` clear rDNS · `f` route failover (v4/v6 from selection, `id targetServerId`) · `R` refresh |
+| Account | user profile + SSH keys · `k` list keys · `a` add (`name\|public key`) · `d` delete · `L` logs · `R` refresh |
 
 Parallel jobs show in the bottom bar. `q` quits.
 
@@ -129,7 +131,7 @@ netcup servers set hostname <value> [selector]
 netcup servers set nickname <value> [selector]
 netcup servers set uefi <true|false> [selector]
 netcup servers set bootorder <CDROM,HDD,NETWORK> [selector]
-netcup servers set root-password <value> [selector]
+netcup servers set root-password [selector] [--password-file PATH|-]
 netcup servers set autostart <true|false> [selector]
 netcup servers set os-optimization <LINUX|WINDOWS|BSD|LINUX_LEGACY|UNKNOWN> [selector]
 netcup servers set cpu-topology <sockets>,<coresPerSocket> [selector]

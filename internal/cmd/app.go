@@ -3,8 +3,10 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"math"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/brandonkramer/netcup-cli/internal/auth"
@@ -50,6 +52,9 @@ func (a *App) Init() error {
 		return err
 	}
 	if a.Flags.Profile != "" {
+		if err := config.ValidateProfile(a.Flags.Profile); err != nil {
+			return err
+		}
 		cfg.Profile = a.Flags.Profile
 	}
 	a.Cfg = cfg
@@ -57,6 +62,11 @@ func (a *App) Init() error {
 	format := a.Flags.Format
 	if format == "" {
 		format = cfg.Format
+	}
+	if format != "" {
+		if _, err := output.ParseFormat(format); err != nil {
+			return output.Exit(output.ExitUsage, err.Error())
+		}
 	}
 	a.Out = output.NewPrinter(format)
 	a.Out.Quiet = a.Flags.Quiet
@@ -105,16 +115,15 @@ func (a *App) EnsureClient(ctx context.Context) error {
 	return nil
 }
 
-func (a *App) ResolveUserID() (int32, error) {
+func (a *App) ResolveUserID(ctx context.Context) (int32, error) {
 	if a.Flags.UserID != "" {
-		var id int32
-		_, err := fmt.Sscanf(a.Flags.UserID, "%d", &id)
-		if err != nil {
-			return 0, output.Exit(output.ExitUsage, "invalid --user-id")
+		n, err := strconv.ParseInt(a.Flags.UserID, 10, 32)
+		if err != nil || n < 1 || n > math.MaxInt32 {
+			return 0, output.Exit(output.ExitUsage, "invalid --user-id (want positive integer)")
 		}
-		return id, nil
+		return int32(n), nil
 	}
-	return a.Auth.UserIDInt()
+	return a.Auth.UserIDInt(ctx)
 }
 
 func (a *App) WaitOpts() wait.Options {

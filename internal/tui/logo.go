@@ -6,11 +6,11 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// ANSI-16-friendly bright colors (visible on almost every terminal).
+// Blue-only gradient (no magenta/purple).
 var logoGradient = []lipgloss.Color{
-	lipgloss.Color("13"), // bright magenta
-	lipgloss.Color("5"),  // magenta
-	lipgloss.Color("12"), // bright blue
+	lipgloss.Color("39"), // dodger blue
+	lipgloss.Color("33"), // bright blue
+	lipgloss.Color("12"), // ansi bright blue
 	lipgloss.Color("14"), // bright cyan
 }
 

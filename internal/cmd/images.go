@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"fmt"
 	"path/filepath"
 	"strconv"
 
@@ -46,6 +47,9 @@ func newImagesFlavoursCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if resp == nil {
+				return fmt.Errorf("images.flavours: empty response")
+			}
 			if resp.StatusCode() != 200 {
 				return app.HandleAPIError("images.flavours", resp.StatusCode(), resp.Body)
 			}
@@ -56,11 +60,12 @@ func newImagesFlavoursCmd() *cobra.Command {
 
 func newImagesSetupCmd() *cobra.Command {
 	var (
-		flavourID                             int32
-		disk, hostname, locale, timezone      string
-		user, password, customScript, bodyFile string
-		sshKeys                               []int32
-		rootFull, email, sshPassAuth bool
+		flavourID                        int32
+		disk, hostname, locale, timezone string
+		user, passwordFile               string
+		customScript, bodyFile           string
+		sshKeys                          []int32
+		rootFull, email, sshPassAuth     bool
 	)
 	c := &cobra.Command{
 		Use:   "setup [selector]",
@@ -108,8 +113,12 @@ func newImagesSetupCmd() *cobra.Command {
 				if user != "" {
 					body.AdditionalUserUsername = &user
 				}
-				if password != "" {
-					body.AdditionalUserPassword = &password
+				if passwordFile != "" {
+					secret, err := readSecret("Additional user password: ", passwordFile)
+					if err != nil {
+						return err
+					}
+					body.AdditionalUserPassword = &secret
 				}
 				if customScript != "" {
 					body.CustomScript = &customScript
@@ -132,6 +141,9 @@ func newImagesSetupCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if resp == nil {
+				return fmt.Errorf("images.setup: empty response")
+			}
 			return handleTaskResp(cmd.Context(), "images.setup", resp.StatusCode(), firstTask(resp.HALJSON202, resp.JSON202), resp.Body)
 		},
 	}
@@ -141,7 +153,7 @@ func newImagesSetupCmd() *cobra.Command {
 	c.Flags().StringVar(&locale, "locale", "", "locale")
 	c.Flags().StringVar(&timezone, "timezone", "", "timezone")
 	c.Flags().StringVar(&user, "user", "", "additional user username")
-	c.Flags().StringVar(&password, "password", "", "additional user password")
+	c.Flags().StringVar(&passwordFile, "password-file", "", "additional user password from file (use - for stdin)")
 	c.Flags().StringVar(&customScript, "custom-script", "", "cloud-init / custom script")
 	c.Flags().Int32SliceVar(&sshKeys, "ssh-key-id", nil, "SSH key ids (repeatable)")
 	c.Flags().BoolVar(&rootFull, "root-full-disk", false, "root partition uses full disk")
@@ -181,6 +193,9 @@ func newImagesSetupUserCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if resp == nil {
+				return fmt.Errorf("images.setup-user: empty response")
+			}
 			return handleTaskResp(cmd.Context(), "images.setup-user", resp.StatusCode(), firstTask(resp.HALJSON202, resp.JSON202), resp.Body)
 		},
 	}
@@ -200,13 +215,16 @@ func newImagesListCmd() *cobra.Command {
 			if err := app.EnsureClient(cmd.Context()); err != nil {
 				return err
 			}
-			uid, err := app.ResolveUserID()
+			uid, err := app.ResolveUserID(cmd.Context())
 			if err != nil {
 				return err
 			}
 			resp, err := app.Client.GetApiV1UsersUserIdImagesWithResponse(cmd.Context(), uid)
 			if err != nil {
 				return err
+			}
+			if resp == nil {
+				return fmt.Errorf("images.list: empty response")
 			}
 			if resp.StatusCode() != 200 {
 				return app.HandleAPIError("images.list", resp.StatusCode(), resp.Body)
@@ -232,7 +250,7 @@ func newImagesUploadCmd() *cobra.Command {
 			if err := app.EnsureClient(cmd.Context()); err != nil {
 				return err
 			}
-			uid, err := app.ResolveUserID()
+			uid, err := app.ResolveUserID(cmd.Context())
 			if err != nil {
 				return err
 			}
@@ -250,8 +268,8 @@ func newImagesUploadCmd() *cobra.Command {
 
 func newImagesDeleteCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "delete <key>",
-		Args:  cobra.ExactArgs(1),
+		Use:  "delete <key>",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			app.Out.Command = "images.delete"
 			if err := app.Confirm("delete user image"); err != nil {
@@ -260,13 +278,16 @@ func newImagesDeleteCmd() *cobra.Command {
 			if err := app.EnsureClient(cmd.Context()); err != nil {
 				return err
 			}
-			uid, err := app.ResolveUserID()
+			uid, err := app.ResolveUserID(cmd.Context())
 			if err != nil {
 				return err
 			}
 			resp, err := app.Client.DeleteApiV1UsersUserIdImagesKeyWithResponse(cmd.Context(), uid, args[0])
 			if err != nil {
 				return err
+			}
+			if resp == nil {
+				return fmt.Errorf("images.delete: empty response")
 			}
 			if resp.StatusCode() != 200 && resp.StatusCode() != 204 {
 				return app.HandleAPIError("images.delete", resp.StatusCode(), resp.Body)
@@ -278,20 +299,23 @@ func newImagesDeleteCmd() *cobra.Command {
 
 func newImagesDownloadURLCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "download-url <key>",
-		Args:  cobra.ExactArgs(1),
+		Use:  "download-url <key>",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			app.Out.Command = "images.download-url"
 			if err := app.EnsureClient(cmd.Context()); err != nil {
 				return err
 			}
-			uid, err := app.ResolveUserID()
+			uid, err := app.ResolveUserID(cmd.Context())
 			if err != nil {
 				return err
 			}
 			resp, err := app.Client.GetApiV1UsersUserIdImagesKeyWithResponse(cmd.Context(), uid, args[0])
 			if err != nil {
 				return err
+			}
+			if resp == nil {
+				return fmt.Errorf("images.download-url: empty response")
 			}
 			if resp.StatusCode() != 200 {
 				return app.HandleAPIError("images.download-url", resp.StatusCode(), resp.Body)
@@ -312,7 +336,7 @@ func newImagesPrepareUploadCmd() *cobra.Command {
 			if err := app.EnsureClient(cmd.Context()); err != nil {
 				return err
 			}
-			uid, err := app.ResolveUserID()
+			uid, err := app.ResolveUserID(cmd.Context())
 			if err != nil {
 				return err
 			}
@@ -329,14 +353,14 @@ func newImagesPrepareUploadCmd() *cobra.Command {
 
 func newImagesPartURLCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "part-url <key> <uploadId> <partNumber>",
-		Args:  cobra.ExactArgs(3),
+		Use:  "part-url <key> <uploadId> <partNumber>",
+		Args: cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			app.Out.Command = "images.part-url"
 			if err := app.EnsureClient(cmd.Context()); err != nil {
 				return err
 			}
-			uid, err := app.ResolveUserID()
+			uid, err := app.ResolveUserID(cmd.Context())
 			if err != nil {
 				return err
 			}
@@ -375,7 +399,7 @@ func newImagesCompleteUploadCmd() *cobra.Command {
 			if err := app.EnsureClient(cmd.Context()); err != nil {
 				return err
 			}
-			uid, err := app.ResolveUserID()
+			uid, err := app.ResolveUserID(cmd.Context())
 			if err != nil {
 				return err
 			}

@@ -91,3 +91,13 @@ type mediaItem struct {
 func (i mediaItem) FilterValue() string { return i.filter }
 func (i mediaItem) Title() string       { return i.title }
 func (i mediaItem) Description() string { return i.description }
+
+type resourceItem struct {
+	kind, id, title, description, raw string
+}
+
+func (i resourceItem) FilterValue() string {
+	return strings.Join([]string{i.kind, i.id, i.title, i.description}, " ")
+}
+func (i resourceItem) Title() string       { return i.title }
+func (i resourceItem) Description() string { return i.description }

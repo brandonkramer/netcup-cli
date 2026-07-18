@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/brandonkramer/netcup-cli/internal/output"
@@ -17,18 +19,40 @@ var (
 )
 
 func Execute() {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	root := NewRoot()
-	if err := root.Execute(); err != nil {
+	if err := root.ExecuteContext(ctx); err != nil {
+		if isInterrupted(ctx, err) {
+			fmt.Fprintln(os.Stderr, "interrupted")
+			os.Exit(output.ExitInterrupted)
+		}
 		var ee *output.ExitError
 		if errors.As(err, &ee) {
-			if ee.Message != "" && app.Out != nil && app.Out.Format == output.FormatTable {
-				// already printed by Fail in many paths
+			if !ee.Rendered && ee.Message != "" {
+				renderExitError(ee)
 			}
 			os.Exit(ee.Code)
 		}
 		fmt.Fprintln(os.Stderr, err.Error())
 		os.Exit(output.ExitAPI)
 	}
+}
+
+func isInterrupted(ctx context.Context, err error) bool {
+	if errors.Is(err, context.Canceled) || errors.Is(ctx.Err(), context.Canceled) {
+		return true
+	}
+	return false
+}
+
+func renderExitError(ee *output.ExitError) {
+	if app.Out != nil {
+		_ = app.Out.WriteError(ee.Code, "cli", "", ee.Message, 0, nil)
+		return
+	}
+	fmt.Fprintln(os.Stderr, "Error: "+ee.Message)
 }
 
 func NewRoot() *cobra.Command {

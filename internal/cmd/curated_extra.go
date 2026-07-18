@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"strings"
 
@@ -46,6 +47,9 @@ func newNICsCreateCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if resp == nil {
+				return fmt.Errorf("nics.create: empty response")
+			}
 			return handleTaskResp(cmd.Context(), "nics.create", resp.StatusCode(), firstTask(resp.HALJSON202, resp.JSON202), resp.Body)
 		},
 	}
@@ -79,6 +83,9 @@ func newNICsUpdateCmd() *cobra.Command {
 			resp, err := app.Client.PutApiV1ServersServerIdInterfacesMacWithResponse(cmd.Context(), id, mac, body)
 			if err != nil {
 				return err
+			}
+			if resp == nil {
+				return fmt.Errorf("nics.update: empty response")
 			}
 			return handleTaskResp(cmd.Context(), "nics.update", resp.StatusCode(), firstTask(resp.HALJSON202, resp.JSON202), resp.Body)
 		},
@@ -130,6 +137,9 @@ func newFirewallSetCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if resp == nil {
+				return fmt.Errorf("firewall.set: empty response")
+			}
 			return handleTaskResp(cmd.Context(), "firewall.set", resp.StatusCode(), firstTask(resp.HALJSON202, resp.JSON202), resp.Body)
 		},
 	}
@@ -154,7 +164,7 @@ func newFirewallPoliciesCreateCmd() *cobra.Command {
 			if err := app.EnsureClient(cmd.Context()); err != nil {
 				return err
 			}
-			uid, err := app.ResolveUserID()
+			uid, err := app.ResolveUserID(cmd.Context())
 			if err != nil {
 				return err
 			}
@@ -181,6 +191,9 @@ func newFirewallPoliciesCreateCmd() *cobra.Command {
 			resp, err := app.Client.PostApiV1UsersUserIdFirewallPoliciesWithResponse(cmd.Context(), uid, body)
 			if err != nil {
 				return err
+			}
+			if resp == nil {
+				return fmt.Errorf("firewall-policies.create: empty response")
 			}
 			if resp.StatusCode() != 201 {
 				return app.HandleAPIError("firewall-policies.create", resp.StatusCode(), resp.Body)
@@ -209,7 +222,7 @@ func newFirewallPoliciesUpdateCmd() *cobra.Command {
 			if err := app.EnsureClient(cmd.Context()); err != nil {
 				return err
 			}
-			uid, err := app.ResolveUserID()
+			uid, err := app.ResolveUserID(cmd.Context())
 			if err != nil {
 				return err
 			}
@@ -240,6 +253,9 @@ func newFirewallPoliciesUpdateCmd() *cobra.Command {
 			resp, err := app.Client.PutApiV1UsersUserIdFirewallPoliciesIdWithResponse(cmd.Context(), uid, pid, body)
 			if err != nil {
 				return err
+			}
+			if resp == nil {
+				return fmt.Errorf("firewall-policies.update: empty response")
 			}
 			status := resp.StatusCode()
 			if status == 202 {
@@ -274,7 +290,7 @@ func newVLANsUpdateCmd() *cobra.Command {
 			if err := app.EnsureClient(cmd.Context()); err != nil {
 				return err
 			}
-			uid, err := app.ResolveUserID()
+			uid, err := app.ResolveUserID(cmd.Context())
 			if err != nil {
 				return err
 			}
@@ -289,6 +305,9 @@ func newVLANsUpdateCmd() *cobra.Command {
 			resp, err := app.Client.PutApiV1UsersUserIdVlansVlanIdWithResponse(cmd.Context(), uid, vid, body)
 			if err != nil {
 				return err
+			}
+			if resp == nil {
+				return fmt.Errorf("vlans.update: empty response")
 			}
 			status := resp.StatusCode()
 			if status == 202 {
@@ -313,18 +332,19 @@ func newUsersUpdateCmd() *cobra.Command {
 		secureMode      bool
 		showNickname    bool
 		passwordless    bool
-		password        string
-		oldPassword     string
+		passwordFile    string
+		oldPasswordFile string
 	)
 	c := &cobra.Command{
 		Use:   "update",
 		Short: "Update the current user profile",
+		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			app.Out.Command = "users.update"
 			if err := app.EnsureClient(cmd.Context()); err != nil {
 				return err
 			}
-			uid, err := app.ResolveUserID()
+			uid, err := app.ResolveUserID(cmd.Context())
 			if err != nil {
 				return err
 			}
@@ -356,17 +376,28 @@ func newUsersUpdateCmd() *cobra.Command {
 				if cmd.Flags().Changed("passwordless") {
 					body.PasswordlessMode = &passwordless
 				}
-				if password != "" {
-					body.Password = &password
+				if passwordFile != "" {
+					secret, err := readSecret("New password: ", passwordFile)
+					if err != nil {
+						return err
+					}
+					body.Password = &secret
 				}
-				if oldPassword != "" {
-					body.OldPassword = &oldPassword
+				if oldPasswordFile != "" {
+					secret, err := readSecret("Current password: ", oldPasswordFile)
+					if err != nil {
+						return err
+					}
+					body.OldPassword = &secret
 				}
 			}
 
 			resp, err := app.Client.PutApiV1UsersUserIdWithResponse(cmd.Context(), uid, body)
 			if err != nil {
 				return err
+			}
+			if resp == nil {
+				return fmt.Errorf("users.update: empty response")
 			}
 			if resp.StatusCode() != 200 {
 				return app.HandleAPIError("users.update", resp.StatusCode(), resp.Body)
@@ -381,8 +412,8 @@ func newUsersUpdateCmd() *cobra.Command {
 	c.Flags().BoolVar(&secureMode, "secure-mode", false, "secure mode")
 	c.Flags().BoolVar(&showNickname, "show-nickname", false, "show nickname")
 	c.Flags().BoolVar(&passwordless, "passwordless", false, "passwordless mode")
-	c.Flags().StringVar(&password, "password", "", "new password")
-	c.Flags().StringVar(&oldPassword, "old-password", "", "current password")
+	c.Flags().StringVar(&passwordFile, "password-file", "", "new password from file (use - for stdin)")
+	c.Flags().StringVar(&oldPasswordFile, "old-password-file", "", "current password from file (use - for stdin)")
 	return c
 }
 
@@ -400,7 +431,7 @@ func newSSHKeysAddCmd() *cobra.Command {
 			if err := app.EnsureClient(cmd.Context()); err != nil {
 				return err
 			}
-			uid, err := app.ResolveUserID()
+			uid, err := app.ResolveUserID(cmd.Context())
 			if err != nil {
 				return err
 			}
@@ -423,6 +454,9 @@ func newSSHKeysAddCmd() *cobra.Command {
 			resp, err := app.Client.PostApiV1UsersUserIdSshKeysWithResponse(cmd.Context(), uid, body)
 			if err != nil {
 				return err
+			}
+			if resp == nil {
+				return fmt.Errorf("ssh-keys.add: empty response")
 			}
 			if resp.StatusCode() != 201 {
 				return app.HandleAPIError("ssh-keys.add", resp.StatusCode(), resp.Body)

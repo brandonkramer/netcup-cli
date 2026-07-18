@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 
 	"github.com/brandonkramer/netcup-cli/internal/output"
 	selectserver "github.com/brandonkramer/netcup-cli/internal/select"
@@ -17,8 +18,8 @@ func newDisksCmd() *cobra.Command {
 
 func newDisksListCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "list [selector]",
-		Args:  cobra.MaximumNArgs(1),
+		Use:  "list [selector]",
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			app.Out.Command = "disks.list"
 			if err := app.EnsureClient(cmd.Context()); err != nil {
@@ -32,6 +33,9 @@ func newDisksListCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if resp == nil {
+				return fmt.Errorf("disks.list: empty response")
+			}
 			if resp.StatusCode() != 200 {
 				return app.HandleAPIError("disks.list", resp.StatusCode(), resp.Body)
 			}
@@ -42,8 +46,8 @@ func newDisksListCmd() *cobra.Command {
 
 func newDisksGetCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "get <diskName> [selector]",
-		Args:  cobra.RangeArgs(1, 2),
+		Use:  "get <diskName> [selector]",
+		Args: cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			app.Out.Command = "disks.get"
 			if err := app.EnsureClient(cmd.Context()); err != nil {
@@ -62,6 +66,9 @@ func newDisksGetCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if resp == nil {
+				return fmt.Errorf("disks.get: empty response")
+			}
 			if resp.StatusCode() != 200 {
 				return app.HandleAPIError("disks.get", resp.StatusCode(), resp.Body)
 			}
@@ -72,8 +79,8 @@ func newDisksGetCmd() *cobra.Command {
 
 func newDisksDriversCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "drivers [selector]",
-		Args:  cobra.MaximumNArgs(1),
+		Use:  "drivers [selector]",
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			app.Out.Command = "disks.drivers"
 			if err := app.EnsureClient(cmd.Context()); err != nil {
@@ -87,6 +94,9 @@ func newDisksDriversCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if resp == nil {
+				return fmt.Errorf("disks.drivers: empty response")
+			}
 			if resp.StatusCode() != 200 {
 				return app.HandleAPIError("disks.drivers", resp.StatusCode(), resp.Body)
 			}
@@ -97,8 +107,8 @@ func newDisksDriversCmd() *cobra.Command {
 
 func newDisksSetDriverCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "set-driver <driver> [selector]",
-		Args:  cobra.RangeArgs(1, 2),
+		Use:  "set-driver <driver> [selector]",
+		Args: cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			app.Out.Command = "disks.set-driver"
 			if err := app.EnsureClient(cmd.Context()); err != nil {
@@ -118,6 +128,9 @@ func newDisksSetDriverCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if resp == nil {
+				return fmt.Errorf("disks.set-driver: empty response")
+			}
 			return handleTaskResp(cmd.Context(), "disks.set-driver", resp.StatusCode(), firstTask(resp.HALJSON202, resp.JSON202), resp.Body)
 		},
 	}
@@ -125,8 +138,8 @@ func newDisksSetDriverCmd() *cobra.Command {
 
 func newDisksFormatCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "format <diskName> [selector]",
-		Args:  cobra.RangeArgs(1, 2),
+		Use:  "format <diskName> [selector]",
+		Args: cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			app.Out.Command = "disks.format"
 			if err := app.Confirm("format disk (ALL DATA WILL BE LOST)"); err != nil {
@@ -152,6 +165,9 @@ func newDisksFormatCmd() *cobra.Command {
 			resp, err := app.Client.PostApiV1ServersServerIdDisksDiskNameFormatWithResponse(cmd.Context(), id, disk)
 			if err != nil {
 				return err
+			}
+			if resp == nil {
+				return fmt.Errorf("disks.format: empty response")
 			}
 			return handleTaskResp(cmd.Context(), "disks.format", resp.StatusCode(), firstTask(resp.HALJSON202, resp.JSON202), resp.Body)
 		},

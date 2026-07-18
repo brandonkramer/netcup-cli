@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
@@ -61,6 +62,9 @@ func newMaintenanceCmd() *cobra.Command {
 			resp, err := app.Client.GetApiV1MaintenanceWithResponse(cmd.Context())
 			if err != nil {
 				return err
+			}
+			if resp == nil {
+				return fmt.Errorf("maintenance: empty response")
 			}
 			if resp.StatusCode() != 200 {
 				return app.HandleAPIError("maintenance", resp.StatusCode(), resp.Body)

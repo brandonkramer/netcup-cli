@@ -27,6 +27,9 @@ func s3API(kind s3Kind, userID int32) upload.API {
 				if err != nil {
 					return nil, err
 				}
+				if resp == nil {
+					return nil, fmt.Errorf("prepare ISO upload: empty response")
+				}
 				if resp.StatusCode() != 201 {
 					return nil, fmt.Errorf("prepare ISO upload: HTTP %d: %s", resp.StatusCode(), truncate(string(resp.Body), 300))
 				}
@@ -35,6 +38,9 @@ func s3API(kind s3Kind, userID int32) upload.API {
 				resp, err := app.Client.PostApiV1UsersUserIdImagesKeyWithResponse(ctx, userID, key, &scpclient.PostApiV1UsersUserIdImagesKeyParams{Multipart: &mp})
 				if err != nil {
 					return nil, err
+				}
+				if resp == nil {
+					return nil, fmt.Errorf("prepare image upload: empty response")
 				}
 				if resp.StatusCode() != 201 {
 					return nil, fmt.Errorf("prepare image upload: HTTP %d: %s", resp.StatusCode(), truncate(string(resp.Body), 300))
@@ -49,6 +55,9 @@ func s3API(kind s3Kind, userID int32) upload.API {
 				if err != nil {
 					return "", err
 				}
+				if resp == nil {
+					return "", fmt.Errorf("part URL: empty response")
+				}
 				if resp.StatusCode() != 200 {
 					return "", fmt.Errorf("part URL: HTTP %d: %s", resp.StatusCode(), truncate(string(resp.Body), 300))
 				}
@@ -57,6 +66,9 @@ func s3API(kind s3Kind, userID int32) upload.API {
 				resp, err := app.Client.GetApiV1UsersUserIdImagesKeyUploadIdPartsPartNumberWithResponse(ctx, userID, key, uploadID, part)
 				if err != nil {
 					return "", err
+				}
+				if resp == nil {
+					return "", fmt.Errorf("part URL: empty response")
 				}
 				if resp.StatusCode() != 200 {
 					return "", fmt.Errorf("part URL: HTTP %d: %s", resp.StatusCode(), truncate(string(resp.Body), 300))
@@ -71,6 +83,9 @@ func s3API(kind s3Kind, userID int32) upload.API {
 				if err != nil {
 					return err
 				}
+				if resp == nil {
+					return fmt.Errorf("complete ISO upload: empty response")
+				}
 				if resp.StatusCode() != 200 && resp.StatusCode() != 204 {
 					return fmt.Errorf("complete ISO upload: HTTP %d: %s", resp.StatusCode(), truncate(string(resp.Body), 300))
 				}
@@ -79,6 +94,9 @@ func s3API(kind s3Kind, userID int32) upload.API {
 				resp, err := app.Client.PutApiV1UsersUserIdImagesKeyUploadIdWithResponse(ctx, userID, key, uploadID, parts)
 				if err != nil {
 					return err
+				}
+				if resp == nil {
+					return fmt.Errorf("complete image upload: empty response")
 				}
 				if resp.StatusCode() != 200 && resp.StatusCode() != 204 {
 					return fmt.Errorf("complete image upload: HTTP %d: %s", resp.StatusCode(), truncate(string(resp.Body), 300))

@@ -38,8 +38,7 @@ func (m model) updateTasksKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m model) onTasksLoaded(msg tasksLoadedMsg) (tea.Model, tea.Cmd) {
 	m.loading = false
 	if msg.err != nil {
-		m.errMsg = msg.err.Error()
-		m.status = "failed to load tasks"
+		m.setErr(msg.err, "failed to load tasks")
 		return m, nil
 	}
 	items := make([]list.Item, 0, len(msg.tasks))
@@ -58,8 +57,11 @@ func (m model) onTaskCancel(msg taskCancelMsg) (tea.Model, tea.Cmd) {
 		m.status = "cancel failed"
 		return m, nil
 	}
-	j := jobFromTask(0, shortUUID(msg.uuid), "cancel", msg.task, nil)
+	j := jobFromTaskStatus(0, shortUUID(msg.uuid), "cancel", msg.status, msg.task, nil)
 	m.status = "cancel requested"
+	if j.State == "UNTRACKED" {
+		m.status = "cancel accepted (untracked — refresh to verify)"
+	}
 	cmd := m.trackJob(j)
 	return m, tea.Batch(cmd, loadTasksCmd(m.ctx, m.deps.Client))
 }
@@ -103,8 +105,7 @@ func (m model) updateMetricsKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m model) onMetricsLoaded(msg metricsLoadedMsg) (tea.Model, tea.Cmd) {
 	m.loading = false
 	if msg.err != nil {
-		m.errMsg = msg.err.Error()
-		m.status = "metrics failed"
+		m.setErr(msg.err, "metrics failed")
 		return m, nil
 	}
 	m.metricsKind = msg.kind
@@ -163,6 +164,61 @@ func (m model) updateMediaKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.confirm = &confirmState{action: "iso-detach", ids: []int32{id}, names: []string{name}}
 		return m, nil
+	case "u":
+		return m.beginResourceEdit("iso-upload", "absolute ISO path")
+	case "i":
+		return m.beginResourceEdit("image-upload", "absolute image path")
+	case "F":
+		if m.server.ID == 0 && id == 0 {
+			m.status = "select a server first"
+			return m, nil
+		}
+		sid := m.server.ID
+		if sid == 0 {
+			sid = id
+		}
+		m.loading = true
+		m.status = "loading flavours…"
+		return m, loadFlavoursCmd(m.ctx, m.deps.Client, sid)
+	case "S":
+		if m.server.ID == 0 && id == 0 {
+			m.status = "select a server first"
+			return m, nil
+		}
+		return m.beginResourceEdit("image-setup", `@file or {"imageFlavourId":N}`)
+	case "U":
+		it, ok := m.mediaList.SelectedItem().(mediaItem)
+		if !ok || it.kind != "image" || it.userName == "" {
+			m.status = "select a user image"
+			return m, nil
+		}
+		sid := m.server.ID
+		if sid == 0 {
+			sid = id
+		}
+		if sid == 0 {
+			m.status = "select a server first"
+			return m, nil
+		}
+		m.confirm = &confirmState{
+			action: "image-setup-user",
+			ids:    []int32{sid},
+			names:  []string{name + " ← " + it.userName},
+			extra:  it.userName,
+		}
+		return m, nil
+	case "d":
+		it, ok := m.mediaList.SelectedItem().(mediaItem)
+		if !ok || (it.kind != "user" && it.kind != "image") {
+			m.status = "select a user ISO or image"
+			return m, nil
+		}
+		action := "iso-delete"
+		if it.kind == "image" {
+			action = "image-delete"
+		}
+		m.confirm = &confirmState{action: action, names: []string{it.title}, extra: it.userName}
+		return m, nil
 	case "enter":
 		if id == 0 {
 			m.status = "no server"
@@ -194,8 +250,7 @@ func (m model) updateMediaKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m model) onMediaLoaded(msg mediaLoadedMsg) (tea.Model, tea.Cmd) {
 	m.loading = false
 	if msg.err != nil {
-		m.errMsg = msg.err.Error()
-		m.status = "media failed"
+		m.setErr(msg.err, "media failed")
 		return m, nil
 	}
 	m.mediaAttached = msg.attached
@@ -247,6 +302,20 @@ func (m model) onMediaLoaded(msg mediaLoadedMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 	}
+	switch objs := msg.userImages.(type) {
+	case []scpclient.S3Object:
+		for _, o := range objs {
+			key := derefStr(o.Key)
+			items = append(items, mediaItem{kind: "image", title: "image · " + key, description: "user image", userName: key, filter: key})
+		}
+	case *[]scpclient.S3Object:
+		if objs != nil {
+			for _, o := range *objs {
+				key := derefStr(o.Key)
+				items = append(items, mediaItem{kind: "image", title: "image · " + key, description: "user image", userName: key, filter: key})
+			}
+		}
+	}
 	m.mediaList.SetItems(items)
 	m.status = fmt.Sprintf("media: %d items", len(items))
 	m.errMsg = ""
@@ -262,7 +331,10 @@ func (m model) mediaView() string {
 	right := stylePanelTitle.Render("ISO") + "\n" +
 		styleMuted.Render(name) + "\n\n" +
 		kv("Attached", attached) + "\n\n" +
-		styleMuted.Render("Enter attach (boot→CDROM)\nD detach")
+		styleMuted.Render("Enter attach · D detach · u/i upload · F flavours · S setup · U setup-user · d delete")
+	if m.resourceDetail != "" && m.resourceMode == "flavours" {
+		right = m.viewport.View()
+	}
 	return m.twoPanels(m.mediaList.View(), right)
 }
 
@@ -273,8 +345,11 @@ func (m model) onISOAction(msg isoActionMsg) (tea.Model, tea.Cmd) {
 		m.status = msg.action + " failed"
 		return m, nil
 	}
-	j := jobFromTask(id, name, "iso."+msg.action, msg.task, nil)
+	j := jobFromTaskStatus(id, name, "iso."+msg.action, msg.status, msg.task, nil)
 	m.status = "iso " + msg.action
+	if j.State == "UNTRACKED" {
+		m.status = "iso " + msg.action + " accepted (untracked — refresh to verify)"
+	}
 	cmd := m.trackJob(j)
 	reload := loadMediaCmd(m.ctx, m.deps.Client, id, m.deps.UserID)
 	return m, tea.Batch(cmd, reload)
@@ -288,8 +363,11 @@ func (m model) onAttrSet(msg attrSetMsg) (tea.Model, tea.Cmd) {
 		m.status = "set " + msg.attr + " failed"
 		return m, nil
 	}
-	j := jobFromTask(id, name, "set."+msg.attr, msg.task, nil)
+	j := jobFromTaskStatus(id, name, "set."+msg.attr, msg.status, msg.task, nil)
 	m.status = "set " + msg.attr
+	if j.State == "UNTRACKED" {
+		m.status = "set " + msg.attr + " accepted (untracked — refresh to verify)"
+	}
 	cmd := m.trackJob(j)
 	return m, tea.Batch(cmd, m.loadSelectedDetail())
 }
@@ -305,8 +383,11 @@ func (m model) onRescue(msg rescueMsg) (tea.Model, tea.Cmd) {
 		m.status = fmt.Sprintf("rescue: %v", msg.data)
 		return m, nil
 	}
-	j := jobFromTask(id, name, "rescue."+msg.action, msg.task, nil)
+	j := jobFromTaskStatus(id, name, "rescue."+msg.action, msg.status, msg.task, nil)
 	m.status = "rescue " + msg.action
+	if j.State == "UNTRACKED" {
+		m.status = "rescue " + msg.action + " accepted (untracked — refresh to verify)"
+	}
 	cmd := m.trackJob(j)
 	return m, tea.Batch(cmd, m.loadSelectedDetail())
 }

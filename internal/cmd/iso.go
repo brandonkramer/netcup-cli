@@ -2,9 +2,11 @@ package cmd
 
 import (
 	"encoding/json"
+	"fmt"
 	"path/filepath"
 	"strconv"
 
+	"github.com/brandonkramer/netcup-cli/internal/cache"
 	"github.com/brandonkramer/netcup-cli/internal/output"
 	"github.com/brandonkramer/netcup-cli/internal/scpclient"
 	"github.com/brandonkramer/netcup-cli/internal/upload"
@@ -33,6 +35,9 @@ func newISOGetCmd() *cobra.Command {
 			resp, err := app.Client.GetApiV1ServersServerIdIsoWithResponse(cmd.Context(), id)
 			if err != nil {
 				return err
+			}
+			if resp == nil {
+				return fmt.Errorf("iso.get: empty response")
 			}
 			if resp.StatusCode() != 200 {
 				return app.HandleAPIError("iso.get", resp.StatusCode(), resp.Body)
@@ -69,6 +74,9 @@ func newISOAttachCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if resp == nil {
+				return fmt.Errorf("iso.attach: empty response")
+			}
 			return handleTaskResp(cmd.Context(), "iso.attach", resp.StatusCode(), firstTask(resp.HALJSON202, resp.JSON202), resp.Body)
 		},
 	}
@@ -95,10 +103,13 @@ func newISODetachCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if resp == nil {
+				return fmt.Errorf("iso.detach: empty response")
+			}
 			if resp.StatusCode() != 200 && resp.StatusCode() != 204 {
 				return app.HandleAPIError("iso.detach", resp.StatusCode(), resp.Body)
 			}
-			app.Cache.BustTags("servers")
+			app.Cache.BustTags(cache.TagServers)
 			return app.Out.Success(map[string]any{"detached": true}, output.WithHTTPStatus(resp.StatusCode()))
 		},
 	}
@@ -120,6 +131,9 @@ func newISOAvailableCmd() *cobra.Command {
 			resp, err := app.Client.GetApiV1ServersServerIdIsoimagesWithResponse(cmd.Context(), id)
 			if err != nil {
 				return err
+			}
+			if resp == nil {
+				return fmt.Errorf("iso.available: empty response")
 			}
 			if resp.StatusCode() != 200 {
 				return app.HandleAPIError("iso.available", resp.StatusCode(), resp.Body)
@@ -151,13 +165,16 @@ func newISOsListCmd() *cobra.Command {
 			if err := app.EnsureClient(cmd.Context()); err != nil {
 				return err
 			}
-			uid, err := app.ResolveUserID()
+			uid, err := app.ResolveUserID(cmd.Context())
 			if err != nil {
 				return err
 			}
 			resp, err := app.Client.GetApiV1UsersUserIdIsosWithResponse(cmd.Context(), uid)
 			if err != nil {
 				return err
+			}
+			if resp == nil {
+				return fmt.Errorf("isos.list: empty response")
 			}
 			if resp.StatusCode() != 200 {
 				return app.HandleAPIError("isos.list", resp.StatusCode(), resp.Body)
@@ -183,7 +200,7 @@ func newISOsUploadCmd() *cobra.Command {
 			if err := app.EnsureClient(cmd.Context()); err != nil {
 				return err
 			}
-			uid, err := app.ResolveUserID()
+			uid, err := app.ResolveUserID(cmd.Context())
 			if err != nil {
 				return err
 			}
@@ -211,13 +228,16 @@ func newISOsDeleteCmd() *cobra.Command {
 			if err := app.EnsureClient(cmd.Context()); err != nil {
 				return err
 			}
-			uid, err := app.ResolveUserID()
+			uid, err := app.ResolveUserID(cmd.Context())
 			if err != nil {
 				return err
 			}
 			resp, err := app.Client.DeleteApiV1UsersUserIdIsosKeyWithResponse(cmd.Context(), uid, args[0])
 			if err != nil {
 				return err
+			}
+			if resp == nil {
+				return fmt.Errorf("isos.delete: empty response")
 			}
 			if resp.StatusCode() != 200 && resp.StatusCode() != 204 {
 				return app.HandleAPIError("isos.delete", resp.StatusCode(), resp.Body)
@@ -236,13 +256,16 @@ func newISOsDownloadURLCmd() *cobra.Command {
 			if err := app.EnsureClient(cmd.Context()); err != nil {
 				return err
 			}
-			uid, err := app.ResolveUserID()
+			uid, err := app.ResolveUserID(cmd.Context())
 			if err != nil {
 				return err
 			}
 			resp, err := app.Client.GetApiV1UsersUserIdIsosKeyWithResponse(cmd.Context(), uid, args[0])
 			if err != nil {
 				return err
+			}
+			if resp == nil {
+				return fmt.Errorf("isos.download-url: empty response")
 			}
 			if resp.StatusCode() != 200 {
 				return app.HandleAPIError("isos.download-url", resp.StatusCode(), resp.Body)
@@ -263,7 +286,7 @@ func newISOsPrepareUploadCmd() *cobra.Command {
 			if err := app.EnsureClient(cmd.Context()); err != nil {
 				return err
 			}
-			uid, err := app.ResolveUserID()
+			uid, err := app.ResolveUserID(cmd.Context())
 			if err != nil {
 				return err
 			}
@@ -287,7 +310,7 @@ func newISOsPartURLCmd() *cobra.Command {
 			if err := app.EnsureClient(cmd.Context()); err != nil {
 				return err
 			}
-			uid, err := app.ResolveUserID()
+			uid, err := app.ResolveUserID(cmd.Context())
 			if err != nil {
 				return err
 			}
@@ -326,7 +349,7 @@ func newISOsCompleteUploadCmd() *cobra.Command {
 			if err := app.EnsureClient(cmd.Context()); err != nil {
 				return err
 			}
-			uid, err := app.ResolveUserID()
+			uid, err := app.ResolveUserID(cmd.Context())
 			if err != nil {
 				return err
 			}

@@ -12,9 +12,33 @@ import (
 
 func apiTimeout() time.Duration { return 45 * time.Second }
 
-// apiCtx uses a fresh timeout so Bubble Tea UI events cannot cancel in-flight GETs.
-func apiCtx() (context.Context, context.CancelFunc) {
-	return context.WithTimeout(context.Background(), apiTimeout())
+// withRetry runs fn up to 3 times on transient network errors.
+// parent is the program/request context; each attempt uses a child timeout.
+func withRetry(parent context.Context, fn func(ctx context.Context) error) error {
+	if parent == nil {
+		parent = context.Background()
+	}
+	var err error
+	for attempt := 0; attempt < 3; attempt++ {
+		if err := parent.Err(); err != nil {
+			return err
+		}
+		ctx, cancel := context.WithTimeout(parent, apiTimeout())
+		err = fn(ctx)
+		cancel()
+		if err == nil || !isTransientNetErr(err) {
+			return err
+		}
+		delay := time.Duration(attempt+1) * 400 * time.Millisecond
+		timer := time.NewTimer(delay)
+		select {
+		case <-parent.Done():
+			timer.Stop()
+			return parent.Err()
+		case <-timer.C:
+		}
+	}
+	return err
 }
 
 func isTransientNetErr(err error) bool {
@@ -57,6 +81,9 @@ func friendlyNetErr(action string, err error) error {
 	if err == nil {
 		return nil
 	}
+	if isAuthFailure(err) {
+		return err
+	}
 	if !isTransientNetErr(err) {
 		return err
 	}
@@ -73,19 +100,4 @@ func friendlyNetErr(action string, err error) error {
 		kind = "connection closed"
 	}
 	return errors.New(action + ": " + kind + " — press R to retry · check https://www.netcup-status.de/")
-}
-
-// withRetry runs fn up to 3 times on transient network errors.
-func withRetry(fn func(ctx context.Context) error) error {
-	var err error
-	for attempt := 0; attempt < 3; attempt++ {
-		ctx, cancel := apiCtx()
-		err = fn(ctx)
-		cancel()
-		if err == nil || !isTransientNetErr(err) {
-			return err
-		}
-		time.Sleep(time.Duration(attempt+1) * 400 * time.Millisecond)
-	}
-	return err
 }

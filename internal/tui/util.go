@@ -2,8 +2,10 @@ package tui
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/brandonkramer/netcup-cli/internal/scpclient"
+	"github.com/charmbracelet/lipgloss"
 )
 
 func derefStr(s *string) string {
@@ -71,4 +73,26 @@ func serverLabel(s scpclient.ServerListMinimal) string {
 		return fmt.Sprintf("#%d", derefInt(s.Id))
 	}
 	return name
+}
+
+// wrapText soft-wraps s to width columns (viewport does not wrap).
+func wrapText(s string, width int) string {
+	if width < 8 {
+		width = 8
+	}
+	return lipgloss.NewStyle().Width(width).Render(s)
+}
+
+func joinNotes(notes []string) string {
+	if len(notes) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("API notes\n\n")
+	for _, n := range notes {
+		b.WriteString("· ")
+		b.WriteString(n)
+		b.WriteString("\n")
+	}
+	return b.String()
 }
