@@ -32,6 +32,14 @@ make build
 cp bin/netcup "$(go env GOPATH)/bin/netcup"
 ```
 
+### Update
+
+```bash
+netcup update              # detect Homebrew / go install / Releases
+netcup update --dry-run    # print the plan only
+netcup update --method go  # force go install
+```
+
 Shell completions:
 
 ```bash
@@ -112,6 +120,7 @@ Device-code OIDC login (`client_id=scp`, scopes `openid offline_access`). Refres
 
 ```text
 netcup                  # interactive TUI (TTY only); alias: netcup tui
+netcup update [--dry-run] [--method homebrew|go|manual]
 netcup ping
 netcup maintenance
 netcup cache stats

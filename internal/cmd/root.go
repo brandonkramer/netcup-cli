@@ -98,6 +98,7 @@ func NewRoot() *cobra.Command {
 	root.AddCommand(
 		newTUICmd(),
 		newAuthCmd(),
+		newUpdateCmd(),
 		newPingCmd(),
 		newMaintenanceCmd(),
 		newServersCmd(),
