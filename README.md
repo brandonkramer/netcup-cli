@@ -373,14 +373,20 @@ Pinned OpenAPI: [`openapi.json`](./openapi.json).
 
 ### Releases
 
+See [CHANGELOG.md](./CHANGELOG.md) for user-facing notes.
+
 Tagged pushes (`v*`) run [GoReleaser](./.goreleaser.yaml) via [`.github/workflows/release.yml`](./.github/workflows/release.yml) and publish archives + `checksums.txt` to GitHub Releases. The binary version is injected with ldflags (`netcup --version`).
 
 ```bash
+# 1) Update CHANGELOG.md (move Unreleased → version section), commit
+# 2) Tag and push
 git tag -a v0.2.0 -m "v0.2.0"
-git push origin v0.2.0
+git push origin HEAD v0.2.0
+# 3) Wait for the release workflow, then bump Homebrew Formula/netcup.rb
+#    in brandonkramer/homebrew-tap from checksums.txt
 ```
 
-After a release, bump [`brandonkramer/homebrew-tap`](https://github.com/brandonkramer/homebrew-tap) `Formula/netcup.rb` URLs and sha256 values from `checksums.txt` so `brew upgrade netcup` picks up the new build.
+After a release, bump [`brandonkramer/homebrew-tap`](https://github.com/brandonkramer/homebrew-tap) `Formula/netcup.rb` URLs and sha256 values from `checksums.txt` so `brew upgrade netcup` / `netcup update` pick up the new build.
 
 ### Keeping up with API drift
 
