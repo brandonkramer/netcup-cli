@@ -1,0 +1,6 @@
+package: scpclient
+generate:
+  client: true
+  models: true
+  embedded-spec: true
+output: internal/scpclient/client.gen.go
