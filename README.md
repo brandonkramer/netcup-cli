@@ -4,6 +4,20 @@ Go CLI for the netcup **SCP (Server Control Panel) REST API**.
 
 ## Install
 
+### Homebrew
+
+```bash
+brew install brandonkramer/tap/netcup
+```
+
+### Go
+
+```bash
+go install github.com/brandonkramer/netcup-cli/cmd/netcup@latest
+```
+
+### From source
+
 ```bash
 go build -o bin/netcup ./cmd/netcup
 # optional: install onto PATH
