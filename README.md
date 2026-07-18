@@ -12,14 +12,22 @@ brew install brandonkramer/tap/netcup
 
 ### Go
 
+Requires a recent Go toolchain (see `go.mod`).
+
 ```bash
 go install github.com/brandonkramer/netcup-cli/cmd/netcup@latest
 ```
 
+### GitHub Releases
+
+Download a prebuilt archive from [Releases](https://github.com/brandonkramer/netcup-cli/releases) (`darwin`/`linux`/`windows`, `amd64`/`arm64`), extract, and put `netcup` on your `PATH`.
+
 ### From source
 
 ```bash
-go build -o bin/netcup ./cmd/netcup
+git clone https://github.com/brandonkramer/netcup-cli.git
+cd netcup-cli
+make build
 # optional: install onto PATH
 cp bin/netcup "$(go env GOPATH)/bin/netcup"
 ```
@@ -43,12 +51,13 @@ netcup servers start -s <selector>
 
 On an interactive TTY, bare `netcup` (no subcommand) opens the ops TUI (servers, tasks, snapshots, disks, firewall, media, network, account). Same via `netcup tui`. Non-TTY / piped use still shows help; scripting stays on subcommands.
 
-Config and credentials live under `~/.config/netcup` (override with `--config-dir` / `NETCUP_CONFIG_DIR`). Profiles use `--profile` / `NETCUP_PROFILE` (default `default`).
+Config and credentials live under `~/.config/netcup` (override with `--config-dir` / `NETCUP_CONFIG_DIR`). Profiles use `--profile` / `NETCUP_PROFILE` (default `default`). Profile names must start and end with an alphanumeric; `.`, `_`, and `-` are allowed in the middle (not `.` / `..` or path separators).
 
 ## Global flags
 
 | Flag / env | Meaning |
 |------------|---------|
+| `--version` | print version and exit |
 | `--format` / `NETCUP_FORMAT` | `table` (TTY default), `json`, `jsonl`, `yaml`, `brief` |
 | `--json` | alias for `--format json` |
 | `-y` / `--yes` | skip destructive confirmations |
@@ -58,7 +67,7 @@ Config and credentials live under `~/.config/netcup` (override with `--config-di
 | `--no-cache` | disable read cache |
 | `--cache-ttl` | override cache TTL for this process |
 | `--profile` / `NETCUP_PROFILE` | credential profile |
-| `--user-id` | override SCP userId (from JWT `sub` by default) |
+| `--user-id` | override SCP userId (positive integer; from JWT `sub` by default) |
 | `-s` / `--server` | server selector: id, name, nickname, or IPv4 |
 | `-q` / `--quiet` | suppress non-essential stderr |
 | `-v` / `--verbose` | verbose logging (tokens redacted) |
@@ -113,11 +122,12 @@ netcup spec mcp             # docs MCP proxy
 netcup completion bash|zsh|fish|powershell
 ```
 
-**TUI:** tabs `1` Servers · `2` Tasks · `3` Snapshots · `4` Disks · `5` Firewall · `6` Media · `7` Network · `8` Account (or `tab`). Opens without credentials and shows an auth gate (`l` device login, `r` retry). Top chrome includes an SCP ping/maintenance chip. The powerline bottom bar shows the active keys, jobs, and a contextual tip. A selected server is carried into server-scoped tabs; `m` opens metrics as a Servers sub-view.
+**TUI:** tabs `1` Servers · `2` Tasks · `3` Snapshots · `4` Disks · `5` Firewall · `6` Media · `7` Network · `8` Account (or `tab` / `shift+tab`). Opens without credentials and shows an auth gate (`l` device login, `r` retry session, `q` quit). Top chrome includes an SCP ping/maintenance chip. The powerline bottom bar shows active keys, jobs, and a contextual tip. A selected server is carried into server-scoped tabs. Async actions that return HTTP 202 without a task UUID show as `UNTRACKED` (refresh to verify).
 
 | Tab | Keys |
 |-----|------|
 | Servers | `j/k` · `space` multi-select · `/` filter · `enter` reload detail · `pgup`/`pgdn` detail scroll · `s/t/r` start/stop/reboot · `P` poweroff · `x` reset · `u` suspend · `h`/`n` hostname/nickname · `A` autostart · `U` UEFI · `b` boot order · `K` keyboard · `g` guest agent · `e`/`d` rescue enable/disable · `m` metrics · `L` logs · `O` storage optimize · `G` GPU driver · `y` copy id · `R` refresh · `a` clear |
+| Metrics (from Servers `m`) | `c/d/n/p` cpu/disk/network/packets · `h` cycle hours (1→6→24→168) · `R` refresh · `esc` back to server detail |
 | Tasks | `c` cancel · `R` refresh |
 | Snapshots | `enter` detail · `c` create · `D` dry-run · `r` revert · `d` delete · `x` export · `R` refresh |
 | Disks | `enter` detail · `v` supported drivers · `s` set driver · `f` format (confirm) · `R` refresh |
@@ -126,7 +136,7 @@ netcup completion bash|zsh|fish|powershell
 | Network | NICs, failover IPv4/IPv6, VLANs · `enter` detail · `c` create VLAN NIC (`vlanId [driver]`) · `e` rename VLAN · `d` delete NIC · `r` set rDNS · `g` get rDNS · `x` clear rDNS · `f` route failover (v4/v6 from selection, `id targetServerId`) · `R` refresh |
 | Account | user profile + SSH keys · `k` list keys · `a` add (`name\|public key`) · `d` delete · `L` logs · `R` refresh |
 
-Parallel jobs show in the bottom bar. `q` quits.
+Parallel jobs show in the bottom bar. `q` / `ctrl+c` quits.
 
 ### Servers
 
@@ -154,7 +164,9 @@ netcup servers set keyboard-layout <value> [selector]
 
 Server selector (`-s` or positional): numeric **id**, **name**, **nickname**, or **IPv4**. Prefer id in scripts.
 
-Power mutations and many other writes return HTTP 202; the CLI waits for the task by default.
+`servers set root-password` never takes the password on the argv. Use `--password-file` (or `-` for stdin), or an interactive TTY prompt.
+
+Power mutations and many other writes return HTTP 202; the CLI waits for the task by default (retries transient 429/5xx while polling).
 
 ### Disks
 
@@ -207,7 +219,7 @@ netcup images download-url <key>
 netcup images prepare-upload|part-url|complete-upload …
 ```
 
-`images setup` flags include `--hostname`, `--disk`, `--locale`, `--timezone`, `--user`, `--password`, `--ssh-key-id`, `--ssh-password-auth`, `--root-full-disk`, `--email`, `--custom-script`, or `--body @file.json`.
+`images setup` flags include `--flavour-id`, `--hostname`, `--disk`, `--locale`, `--timezone`, `--user`, `--password-file`, `--ssh-key-id`, `--ssh-password-auth`, `--root-full-disk`, `--email`, `--custom-script`, or `--body @file.json` (body overrides flags). Additional-user passwords use `--password-file` (or `-` for stdin), never argv.
 
 ### Networking
 
@@ -252,7 +264,9 @@ netcup tasks cancel <uuid>
 
 netcup users get
 netcup users logs [--limit] [--offset]
-netcup users update --language … --timezone … [flags] | --body
+netcup users update [--language] [--timezone] [--password-file] [--old-password-file]
+                    [--passwordless] [--secure-mode] [--show-nickname]
+                    [--api-ip-restrictions] | --body
 
 netcup ssh-keys list
 netcup ssh-keys add --name NAME --key '…' | --key-file PATH
@@ -347,6 +361,17 @@ go test ./...
 ```
 
 Pinned OpenAPI: [`openapi.json`](./openapi.json).
+
+### Releases
+
+Tagged pushes (`v*`) run [GoReleaser](./.goreleaser.yaml) via [`.github/workflows/release.yml`](./.github/workflows/release.yml) and publish archives + `checksums.txt` to GitHub Releases. The binary version is injected with ldflags (`netcup --version`).
+
+```bash
+git tag -a v0.2.0 -m "v0.2.0"
+git push origin v0.2.0
+```
+
+After a release, bump [`brandonkramer/homebrew-tap`](https://github.com/brandonkramer/homebrew-tap) `Formula/netcup.rb` URLs and sha256 values from `checksums.txt` so `brew upgrade netcup` picks up the new build.
 
 ### Keeping up with API drift
 
