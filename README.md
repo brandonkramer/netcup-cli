@@ -2,6 +2,8 @@
 
 Go CLI for the [netcup](https://www.netcup.com/) **SCP (Server Control Panel) REST API**.
 
+![netcup TUI Media tab](preview.png)
+
 ## Install
 
 ### Homebrew
