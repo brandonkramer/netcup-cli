@@ -1,5 +1,8 @@
-/bin/
+/bin/netcup
+/bin/netcup.exe
 /dist/
 *.exe
 .DS_Store
 coverage.out
+__pycache__/
+*.py[cod]

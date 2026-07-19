@@ -362,6 +362,37 @@ netcup call "firewall-policies create" --body @policy.json -y
 
 ---
 
+## Agent MCP
+
+This repository is also a **Codex / Cursor / Claude** plugin: thin FastMCP tools shell out to `netcup --format json`.
+
+**Prereqs:** `netcup` on `PATH` (or `NETCUP_BIN`), [`uv`](https://github.com/astral-sh/uv), a **git checkout** of this repo (plugin files are not in the Homebrew bottle), and `netcup auth login` once.
+
+### One-shot host wiring
+
+From a netcup-cli checkout (or pass `--root`):
+
+```bash
+netcup install-mcp                     # Claude + Cursor + Codex, --scope user
+netcup install-mcp --scope project     # project-local Claude + Cursor mcp.json
+netcup install-mcp --host claude --scope local
+netcup install-mcp --dry-run
+```
+
+Re-run after pulling plugin updates to refresh marketplaces / mcp stubs. Override detection with `--root` / `NETCUP_PLUGIN_ROOT`.
+
+| Host | What `install-mcp` does |
+|------|-------------------------|
+| Claude | Managed marketplace + `claude plugin install netcup@netcup-local` |
+| Cursor | Merges `netcup` into `~/.cursor/mcp.json` (user) or `.cursor/mcp.json` (project) |
+| Codex | Writes local Codex catalog + `codex plugin marketplace add` / `plugin add` |
+
+Manual stdio smoke: `./bin/netcup-mcp`.
+
+**Tool layers:** curated tools for servers / power / tasks / ISO / firewall get; full CLI reach via `netcup_endpoints` → `netcup_describe` → `netcup_call`, or `netcup_cli` for allowlisted argv. Destructive calls need `confirm=true`. Blocked: TUI, `auth login`, secret-on-argv. Skill: [`skills/netcup/SKILL.md`](./skills/netcup/SKILL.md).
+
+---
+
 ## Develop
 
 ```bash

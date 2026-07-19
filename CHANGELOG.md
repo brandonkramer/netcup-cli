@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-19
+
+### Added
+
+- Agent MCP plugin inside the repo (`.codex-plugin` / `.cursor-plugin` / `.claude-plugin`, `plugin/netcup_mcp.py`, `bin/netcup-mcp`, `skills/netcup`) — curated tools plus `netcup_call` / `netcup_cli` for full CLI coverage
+- `netcup install-mcp` — wire/refresh the plugin for Claude, Cursor, and Codex (`--scope`, `--host`, `--root`, `--dry-run`)
+
 ## [0.1.2] - 2026-07-19
 
 ### Fixed
@@ -46,7 +53,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Body-less HTTP 202 jobs reported as `UNTRACKED` instead of success
 - Signal-aware CLI exit (`130`) and cancelable TUI retries
 
-[Unreleased]: https://github.com/brandonkramer/netcup-cli/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/brandonkramer/netcup-cli/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/brandonkramer/netcup-cli/compare/v0.1.2...v0.2.0
 [0.1.2]: https://github.com/brandonkramer/netcup-cli/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/brandonkramer/netcup-cli/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/brandonkramer/netcup-cli/releases/tag/v0.1.0

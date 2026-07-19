@@ -99,6 +99,7 @@ func NewRoot() *cobra.Command {
 		newTUICmd(),
 		newAuthCmd(),
 		newUpdateCmd(),
+		newInstallMCPCmd(),
 		newPingCmd(),
 		newMaintenanceCmd(),
 		newServersCmd(),

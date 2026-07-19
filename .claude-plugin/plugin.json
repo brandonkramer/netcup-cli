@@ -1,0 +1,19 @@
+{
+  "name": "netcup",
+  "version": "0.2.0",
+  "description": "netcup SCP CLI + MCP tools — servers, tasks, ISO, firewall, and full coverage via call/api/cli",
+  "author": {
+    "name": "brandonkramer",
+    "url": "https://github.com/brandonkramer"
+  },
+  "homepage": "https://github.com/brandonkramer/netcup-cli#readme",
+  "repository": "https://github.com/brandonkramer/netcup-cli",
+  "license": "MIT",
+  "keywords": ["netcup", "scp", "vps", "mcp", "servers"],
+  "skills": ["./skills"],
+  "mcpServers": {
+    "netcup": {
+      "command": "${CLAUDE_PLUGIN_ROOT}/bin/netcup-mcp"
+    }
+  }
+}

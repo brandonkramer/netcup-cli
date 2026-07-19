@@ -1,0 +1,17 @@
+{
+  "name": "netcup-local",
+  "owner": {
+    "name": "brandonkramer"
+  },
+  "metadata": {
+    "description": "Local netcup-cli plugin marketplace (Claude Code + Codex legacy path)"
+  },
+  "plugins": [
+    {
+      "name": "netcup",
+      "description": "netcup SCP CLI + MCP tools",
+      "source": "./.",
+      "category": "developer-tools"
+    }
+  ]
+}

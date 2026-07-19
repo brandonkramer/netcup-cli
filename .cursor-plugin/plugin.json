@@ -1,0 +1,14 @@
+{
+  "name": "netcup",
+  "version": "0.2.0",
+  "description": "netcup SCP servers, tasks, ISO, and firewall via MCP — with agent skills for the netcup CLI",
+  "author": {
+    "name": "brandonkramer"
+  },
+  "homepage": "https://github.com/brandonkramer/netcup-cli#readme",
+  "repository": "https://github.com/brandonkramer/netcup-cli",
+  "license": "MIT",
+  "keywords": ["netcup", "scp", "vps", "mcp", "servers"],
+  "skills": "./skills/",
+  "mcpServers": "mcp.json"
+}

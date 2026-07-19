@@ -1,0 +1,43 @@
+{
+  "name": "netcup",
+  "version": "0.2.0",
+  "description": "netcup SCP via thin MCP tools wrapping the netcup CLI — servers, tasks, ISO, firewall, plus call/api/cli for full coverage",
+  "author": {
+    "name": "brandonkramer",
+    "url": "https://github.com/brandonkramer"
+  },
+  "homepage": "https://github.com/brandonkramer/netcup-cli#readme",
+  "repository": "https://github.com/brandonkramer/netcup-cli",
+  "license": "MIT",
+  "keywords": ["netcup", "scp", "vps", "mcp", "servers"],
+  "skills": "./skills/",
+  "mcpServers": {
+    "netcup": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--with",
+        "mcp",
+        "--python",
+        "3.12",
+        "python",
+        "plugin/netcup_mcp.py"
+      ],
+      "cwd": "."
+    }
+  },
+  "interface": {
+    "displayName": "netcup",
+    "shortDescription": "netcup SCP servers and tasks from Codex",
+    "longDescription": "Thin MCP facade over the netcup CLI. Prefer curated tools for common ops; use netcup_call / netcup_cli for the rest. Auth once with netcup auth login.",
+    "developerName": "brandonkramer",
+    "category": "Developer Tools",
+    "capabilities": ["Read", "Write"],
+    "websiteURL": "https://github.com/brandonkramer/netcup-cli",
+    "defaultPrompt": [
+      "List my netcup servers.",
+      "Show recent SCP tasks.",
+      "Ping the netcup SCP API."
+    ]
+  }
+}
