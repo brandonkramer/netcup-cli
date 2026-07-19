@@ -72,6 +72,11 @@ func Materialize(dest, binaryVersion string) error {
 	return nil
 }
 
+// SkillMarkdown returns the embedded netcup agent skill (SKILL.md).
+func SkillMarkdown() ([]byte, error) {
+	return files.ReadFile("files/skills/netcup/SKILL.md")
+}
+
 // ReadEmbed returns the bytes of an embedded file (path relative to package,
 // e.g. files/codex-plugin/plugin.json). Used by drift tests.
 func ReadEmbed(embedPath string) ([]byte, error) {

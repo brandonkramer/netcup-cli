@@ -1,6 +1,6 @@
 {
   "name": "netcup",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "netcup SCP via thin MCP tools wrapping the netcup CLI — servers, tasks, ISO, firewall, plus call/api/cli for full coverage",
   "author": {
     "name": "brandonkramer",

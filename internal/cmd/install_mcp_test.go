@@ -126,3 +126,80 @@ func TestMergeCursorMCPJSON(t *testing.T) {
 		}
 	}
 }
+
+func TestWriteProjectSkill(t *testing.T) {
+	proj := t.TempDir()
+	if err := writeProjectSkill(proj); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(proj, ".agents", "skills", "netcup", "SKILL.md")
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), "name: netcup") {
+		t.Fatalf("unexpected skill content: %s", b[:min(80, len(b))])
+	}
+}
+
+func TestInstallMCPProjectHost(t *testing.T) {
+	proj := t.TempDir()
+	if err := writeProjectSkill(proj); err != nil {
+		t.Fatal(err)
+	}
+	for _, host := range []string{mcpHostCursor, mcpHostClaude, mcpHostCodex} {
+		res, err := installMCPProjectHost(host, "", mcpScopeProject, proj, false)
+		if err != nil {
+			t.Fatalf("%s: %v", host, err)
+		}
+		if res["status"] != "ok" {
+			t.Fatalf("%s status=%v", host, res["status"])
+		}
+	}
+	if _, err := os.Stat(filepath.Join(proj, ".cursor", "mcp.json")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(proj, ".mcp.json")); err != nil {
+		t.Fatal(err)
+	}
+	codexCfg, err := os.ReadFile(filepath.Join(proj, ".codex", "config.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(codexCfg), "[mcp_servers.netcup]") {
+		t.Fatalf("codex config: %s", codexCfg)
+	}
+	// Upsert preserves other tables.
+	if err := os.WriteFile(filepath.Join(proj, ".codex", "config.toml"), []byte("model = \"gpt\"\n\n[mcp_servers.netcup]\ncommand = \"old\"\nargs = [\"x\"]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := installMCPProjectHost(mcpHostCodex, "", mcpScopeProject, proj, false); err != nil {
+		t.Fatal(err)
+	}
+	codexCfg, err = os.ReadFile(filepath.Join(proj, ".codex", "config.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(codexCfg)
+	if !strings.Contains(s, `model = "gpt"`) || !strings.Contains(s, `args = ["mcp"]`) || strings.Contains(s, `"old"`) {
+		t.Fatalf("codex upsert failed: %s", s)
+	}
+	// No marketplace dir for project installs.
+	if _, err := os.Stat(filepath.Join(proj, ".claude", "netcup-marketplace")); !os.IsNotExist(err) {
+		t.Fatalf("unexpected marketplace: %v", err)
+	}
+}
+
+func TestInstallMCPProjectDryRun(t *testing.T) {
+	proj := t.TempDir()
+	res, err := installMCPProjectHost(mcpHostCursor, "", mcpScopeProject, proj, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res["status"] != "dry-run" {
+		t.Fatalf("status=%v", res["status"])
+	}
+	if _, err := os.Stat(filepath.Join(proj, ".cursor", "mcp.json")); !os.IsNotExist(err) {
+		t.Fatal("dry-run should not write mcp.json")
+	}
+}

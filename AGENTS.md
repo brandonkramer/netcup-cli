@@ -30,7 +30,7 @@ Prefer typecheck/test over long-running builds unless asked. Do not start a TUI/
 
 ## Agent MCP
 
-This repo is also a Codex/Cursor/Claude plugin. Agents should use MCP tools (not the TUI). Auth remains `netcup auth login` on a human TTY. Wire hosts with `netcup install-mcp` (`--scope user|project|local`, `--host`, `--root`). See README → Agent MCP and `skills/netcup/SKILL.md`.
+This repo is also a Codex/Cursor/Claude plugin. Agents should use MCP tools (not the TUI). Auth remains `netcup auth login` on a human TTY. Wire hosts with `netcup install-mcp` (`--scope user` = plugins; `--scope project|local` = `.agents/skills/netcup` + host MCP files). See README → Agent MCP and `skills/netcup/SKILL.md`.
 
 ## Rules
 

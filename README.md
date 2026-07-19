@@ -371,19 +371,18 @@ This repository is also a **Codex / Cursor / Claude** plugin. MCP tools shell ou
 ### One-shot host wiring
 
 ```bash
-netcup install-mcp                     # Claude + Cursor + Codex, --scope user
-netcup install-mcp --scope project     # project-local Claude + Cursor mcp.json
-netcup install-mcp --host claude --scope local
+netcup install-mcp                     # --scope user: full plugin wiring
+netcup install-mcp --scope project     # .agents/skills/netcup + host mcp configs
+netcup install-mcp --host cursor --scope project
 netcup install-mcp --dry-run
 ```
 
-Uses a git checkout when present; otherwise materializes plugin files into `~/.config/netcup/plugin`. Override with `--root` / `NETCUP_PLUGIN_ROOT`. Re-run after upgrading `netcup` (or `git pull` in a checkout).
+| Scope | What happens |
+|-------|----------------|
+| `user` | Plugin/marketplace install; Cursor `~/.cursor/mcp.json`. Plugin root from checkout or `~/.config/netcup/plugin` |
+| `project` / `local` | No plugins. Writes `.agents/skills/netcup/SKILL.md` once, plus host MCP: Cursor `.cursor/mcp.json`, Claude `.mcp.json`, Codex `.codex/config.toml` |
 
-| Host | What `install-mcp` does |
-|------|-------------------------|
-| Claude | Managed marketplace + `claude plugin install netcup@netcup-local` |
-| Cursor | Merges `netcup` → `netcup mcp` into mcp.json |
-| Codex | Writes local Codex catalog + `codex plugin marketplace add` / `plugin add` |
+Re-run after upgrading `netcup`. Override binary root with `--root` / `NETCUP_PLUGIN_ROOT` when needed.
 
 Manual stdio smoke: `netcup mcp` (or `./bin/netcup mcp` from a checkout).
 

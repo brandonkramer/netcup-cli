@@ -1,6 +1,6 @@
 {
   "name": "netcup",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "netcup SCP servers, tasks, ISO, and firewall via MCP — with agent skills for the netcup CLI",
   "author": {
     "name": "brandonkramer"
