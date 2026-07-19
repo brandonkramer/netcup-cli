@@ -255,12 +255,12 @@ func (m model) onMediaLoaded(msg mediaLoadedMsg) (tea.Model, tea.Cmd) {
 	}
 	m.mediaAttached = msg.attached
 	items := make([]list.Item, 0)
-	if msg.attached != nil {
+	if label := formatAttachedISO(msg.attached); label != "" {
 		items = append(items, mediaItem{
 			kind:        "attached",
 			title:       "● Currently attached",
-			description: fmt.Sprintf("%v", msg.attached),
-			filter:      "attached",
+			description: label,
+			filter:      "attached " + label,
 		})
 	} else {
 		items = append(items, mediaItem{
@@ -324,9 +324,9 @@ func (m model) onMediaLoaded(msg mediaLoadedMsg) (tea.Model, tea.Cmd) {
 
 func (m model) mediaView() string {
 	_, name := m.focusedServer()
-	attached := "none"
-	if m.mediaAttached != nil {
-		attached = fmt.Sprintf("%v", m.mediaAttached)
+	attached := formatAttachedISO(m.mediaAttached)
+	if attached == "" {
+		attached = "none"
 	}
 	right := stylePanelTitle.Render("ISO") + "\n" +
 		styleMuted.Render(name) + "\n\n" +

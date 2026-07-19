@@ -26,6 +26,47 @@ func derefBool(v *bool) bool {
 	return v != nil && *v
 }
 
+// formatAttachedISO renders GET /iso payloads for the Media tab.
+// Avoids fmt %v on *Iso, which prints pointer addresses for *string/*bool fields.
+func formatAttachedISO(v any) string {
+	if v == nil {
+		return ""
+	}
+	switch iso := v.(type) {
+	case *scpclient.Iso:
+		if iso == nil {
+			return ""
+		}
+		return formatAttachedISO(*iso)
+	case scpclient.Iso:
+		name := derefStr(iso.Iso)
+		if name == "" {
+			if iso.IsoAttached != nil && !*iso.IsoAttached {
+				return ""
+			}
+			return ""
+		}
+		if iso.IsoAttached != nil && !*iso.IsoAttached {
+			return name + " (not attached)"
+		}
+		return name
+	case map[string]any:
+		if name, ok := iso["iso"].(string); ok && name != "" {
+			return name
+		}
+		return strings.TrimSpace(prettyJSON(iso))
+	default:
+		s := strings.TrimSpace(prettyJSON(v))
+		if s == "" || s == "null" {
+			return ""
+		}
+		// Collapse multiline JSON to a one-line label for list descriptions.
+		s = strings.ReplaceAll(s, "\n", " ")
+		s = strings.Join(strings.Fields(s), " ")
+		return s
+	}
+}
+
 func derefState(s *scpclient.ServerState) string {
 	if s == nil {
 		return ""

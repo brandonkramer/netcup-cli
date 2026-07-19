@@ -329,17 +329,15 @@ func (m model) View() string {
 
 	m.layout()
 
-	// Build bottom first (clamped to 1 line each) so we never overflow the
-	// terminal — overflow scrolls away the TOP (logo/tabs).
+	// Build bottom first so we never overflow the terminal — overflow scrolls
+	// away the TOP (tabs). Tip, jobs, and status share one meta line.
 	var bottomParts []string
 	if m.errMsg != "" {
 		bottomParts = append(bottomParts, clampLines(styleErr.Render("✗ "+m.errMsg), 1, m.width))
 	}
 	bottomParts = append(bottomParts,
 		clampLines(m.keysBarView(), 1, m.width),
-		clampLines(m.tipView(), 1, m.width),
-		clampLines(m.jobsView(), 1, m.width),
-		clampLines(m.statusLine(), 1, m.width),
+		m.metaBarView(),
 	)
 	bottom := lipgloss.JoinVertical(lipgloss.Left, bottomParts...)
 	top := m.tabsView()
@@ -386,12 +384,12 @@ func (m model) View() string {
 	return out
 }
 
-func (m model) statusLine() string {
+func (m model) statusText() string {
 	status := m.status
 	if m.loading {
 		status = m.spinner.View() + " " + status
 	}
-	return styleStatusBar.Width(m.width).Render(status)
+	return status
 }
 
 func (m *model) setErr(err error, fallback string) {
@@ -410,7 +408,7 @@ func (m *model) layout() {
 		return
 	}
 	// Estimate body height; View() recomputes exactly after measuring chrome.
-	const tabsH, bottomLines = 2, 5 // tabs/context + keys/tip/jobs/status
+	const tabsH, bottomLines = 2, 3 // tabs/context + keys + tip|jobs|status
 	bodyH := m.height - tabsH - bottomLines
 	if bodyH < 4 {
 		bodyH = 4

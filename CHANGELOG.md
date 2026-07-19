@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-07-19
+
+### Fixed
+
+- Media tab no longer shows Go pointer dumps for the attached ISO; it displays the ISO name
+
+### Changed
+
+- TUI tip, jobs, and status share one bottom meta line (more room for lists)
+
 ## [0.1.1] - 2026-07-18
 
 ### Added
@@ -36,6 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Body-less HTTP 202 jobs reported as `UNTRACKED` instead of success
 - Signal-aware CLI exit (`130`) and cancelable TUI retries
 
-[Unreleased]: https://github.com/brandonkramer/netcup-cli/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/brandonkramer/netcup-cli/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/brandonkramer/netcup-cli/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/brandonkramer/netcup-cli/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/brandonkramer/netcup-cli/releases/tag/v0.1.0

@@ -151,7 +151,7 @@ func (m model) keysBarView() string {
 	return clampLines(joinPowerline(segs), 1, m.width)
 }
 
-func (m model) tipView() string {
+func (m model) tipText() string {
 	tip := "tab cycles tabs · q quits"
 	switch m.tab {
 	case tabServers:
@@ -179,7 +179,14 @@ func (m model) tipView() string {
 	case tabNetwork:
 		tip = "c create VLAN NIC · e rename VLAN · f route failover · g/x rDNS"
 	}
-	return clampLines(styleTip.Render("Tip: ")+styleTipKey.Render(tip), 1, m.width)
+	return styleTip.Render("Tip: ") + styleTipKey.Render(tip)
+}
+
+// metaBarView shows tip, jobs, and status on one horizontal line.
+func (m model) metaBarView() string {
+	sep := styleMuted.Render("  │  ")
+	line := m.tipText() + sep + m.jobsView() + sep + styleStatusBar.Render(m.statusText())
+	return clampLines(line, 1, m.width)
 }
 
 func (m model) serverContextChip() string {
