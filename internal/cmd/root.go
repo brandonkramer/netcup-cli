@@ -100,6 +100,7 @@ func NewRoot() *cobra.Command {
 		newAuthCmd(),
 		newUpdateCmd(),
 		newInstallMCPCmd(),
+		newMCPCmd(),
 		newPingCmd(),
 		newMaintenanceCmd(),
 		newServersCmd(),

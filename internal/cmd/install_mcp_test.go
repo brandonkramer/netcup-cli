@@ -26,20 +26,8 @@ func TestValidateAndFindPluginRoot(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(root, ".codex-plugin"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(filepath.Join(root, "bin"), 0o755); err != nil {
+	if err := os.WriteFile(filepath.Join(root, ".codex-plugin", "plugin.json"), []byte("{}"), 0o644); err != nil {
 		t.Fatal(err)
-	}
-	if err := os.MkdirAll(filepath.Join(root, "plugin"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	for _, rel := range []string{
-		".codex-plugin/plugin.json",
-		"bin/netcup-mcp",
-		"plugin/netcup_mcp.py",
-	} {
-		if err := os.WriteFile(filepath.Join(root, rel), []byte("{}"), 0o644); err != nil {
-			t.Fatal(err)
-		}
 	}
 	nested := filepath.Join(root, "internal", "cmd")
 	if err := os.MkdirAll(nested, 0o755); err != nil {
@@ -57,11 +45,37 @@ func TestValidateAndFindPluginRoot(t *testing.T) {
 	}
 }
 
+func TestResolveMCPCommand(t *testing.T) {
+	root := t.TempDir()
+	distDir := filepath.Join(root, "dist")
+	if err := os.MkdirAll(distDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	dist := filepath.Join(distDir, "netcup")
+	if err := os.WriteFile(dist, []byte("x"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cmd, args := resolveMCPCommand(root)
+	if cmd != dist || len(args) != 1 || args[0] != "mcp" {
+		t.Fatalf("got %q %v", cmd, args)
+	}
+
+	empty := t.TempDir()
+	cmd, args = resolveMCPCommand(empty)
+	if len(args) != 1 || args[0] != "mcp" {
+		t.Fatalf("fallback args %v", args)
+	}
+	if cmd != "netcup" {
+		if _, err := os.Stat(cmd); err != nil {
+			t.Fatalf("unexpected command %q", cmd)
+		}
+	}
+}
+
 func TestMergeCursorMCPJSON(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, ".cursor", "mcp.json")
-	launcher := "/tmp/netcup-cli/bin/netcup-mcp"
-	if err := mergeCursorMCPJSON(path, launcher); err != nil {
+	if err := mergeCursorMCPJSON(path, "/tmp/dist/netcup", []string{"mcp"}); err != nil {
 		t.Fatal(err)
 	}
 	// Second merge preserves other servers.
@@ -69,7 +83,7 @@ func TestMergeCursorMCPJSON(t *testing.T) {
 	if err := os.WriteFile(path, raw, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := mergeCursorMCPJSON(path, launcher); err != nil {
+	if err := mergeCursorMCPJSON(path, "/tmp/dist/netcup", []string{"mcp"}); err != nil {
 		t.Fatal(err)
 	}
 	b, err := os.ReadFile(path)
@@ -77,7 +91,7 @@ func TestMergeCursorMCPJSON(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := string(b)
-	for _, part := range []string{`"other"`, `"netcup"`, launcher} {
+	for _, part := range []string{`"other"`, `"netcup"`, `/tmp/dist/netcup`, `"mcp"`} {
 		if !strings.Contains(s, part) {
 			t.Fatalf("merge missing %q in %s", part, s)
 		}

@@ -31,7 +31,7 @@ git clone https://github.com/brandonkramer/netcup-cli.git
 cd netcup-cli
 make build
 # optional: install onto PATH
-cp bin/netcup "$(go env GOPATH)/bin/netcup"
+cp dist/netcup "$(go env GOPATH)/bin/netcup"
 ```
 
 ### Update
@@ -364,30 +364,29 @@ netcup call "firewall-policies create" --body @policy.json -y
 
 ## Agent MCP
 
-This repository is also a **Codex / Cursor / Claude** plugin: thin FastMCP tools shell out to `netcup --format json`.
+This repository is also a **Codex / Cursor / Claude** plugin. MCP tools shell out to `netcup --format json` via `netcup mcp`.
 
-**Prereqs:** `netcup` on `PATH` (or `NETCUP_BIN`), [`uv`](https://github.com/astral-sh/uv), a **git checkout** of this repo (plugin files are not in the Homebrew bottle), and `netcup auth login` once.
+**Prereqs:** `netcup` on `PATH` (`brew` / `go install` / Releases / `make build`), `netcup auth login` once, and a **git checkout** as the plugin root (manifests + skill).
 
 ### One-shot host wiring
 
-From a netcup-cli checkout (or pass `--root`):
-
 ```bash
+# from a checkout (or pass --root / NETCUP_PLUGIN_ROOT)
 netcup install-mcp                     # Claude + Cursor + Codex, --scope user
 netcup install-mcp --scope project     # project-local Claude + Cursor mcp.json
 netcup install-mcp --host claude --scope local
 netcup install-mcp --dry-run
 ```
 
-Re-run after pulling plugin updates to refresh marketplaces / mcp stubs. Override detection with `--root` / `NETCUP_PLUGIN_ROOT`.
+Re-run after `git pull` to refresh hosts.
 
 | Host | What `install-mcp` does |
 |------|-------------------------|
 | Claude | Managed marketplace + `claude plugin install netcup@netcup-local` |
-| Cursor | Merges `netcup` into `~/.cursor/mcp.json` (user) or `.cursor/mcp.json` (project) |
+| Cursor | Merges `netcup` → `netcup mcp` into mcp.json |
 | Codex | Writes local Codex catalog + `codex plugin marketplace add` / `plugin add` |
 
-Manual stdio smoke: `./bin/netcup-mcp`.
+Manual stdio smoke: `netcup mcp` (or `./dist/netcup mcp` from a checkout).
 
 **Tool layers:** curated tools for servers / power / tasks / ISO / firewall get; full CLI reach via `netcup_endpoints` → `netcup_describe` → `netcup_call`, or `netcup_cli` for allowlisted argv. Destructive calls need `confirm=true`. Blocked: TUI, `auth login`, secret-on-argv. Skill: [`skills/netcup/SKILL.md`](./skills/netcup/SKILL.md).
 
@@ -397,29 +396,12 @@ Manual stdio smoke: `./bin/netcup-mcp`.
 
 ```bash
 make generate   # regenerate client from openapi.json
-make build
+make build      # dist/netcup
 make coverage   # assert all OpenAPI ops are mapped
 go test ./...
 ```
 
 Pinned OpenAPI: [`openapi.json`](./openapi.json).
-
-### Releases
-
-See [CHANGELOG.md](./CHANGELOG.md) for user-facing notes.
-
-Tagged pushes (`v*`) run [GoReleaser](./.goreleaser.yaml) via [`.github/workflows/release.yml`](./.github/workflows/release.yml) and publish archives + `checksums.txt` to GitHub Releases. The binary version is injected with ldflags (`netcup --version`).
-
-```bash
-# 1) Update CHANGELOG.md (move Unreleased → version section), commit
-# 2) Tag and push
-git tag -a v0.2.0 -m "v0.2.0"
-git push origin HEAD v0.2.0
-# 3) Wait for the release workflow, then bump Homebrew Formula/netcup.rb
-#    in brandonkramer/homebrew-tap from checksums.txt
-```
-
-After a release, bump [`brandonkramer/homebrew-tap`](https://github.com/brandonkramer/homebrew-tap) `Formula/netcup.rb` URLs and sha256 values from `checksums.txt` so `brew upgrade netcup` / `netcup update` pick up the new build.
 
 ### Keeping up with API drift
 

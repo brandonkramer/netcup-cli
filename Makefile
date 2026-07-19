@@ -7,7 +7,8 @@ generate:
 	go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.5.1 -config oapi-codegen.yaml openapi.json
 
 build:
-	go build -o bin/netcup ./cmd/netcup
+	mkdir -p dist
+	go build -o dist/netcup ./cmd/netcup
 
 test:
 	go test ./...

@@ -11,14 +11,14 @@ User docs: [README.md](./README.md). Release notes: [CHANGELOG.md](./CHANGELOG.m
 - `internal/tui` — interactive ops TUI
 - `internal/scpclient` — generated OpenAPI client (`make generate` from `openapi.json`)
 - `internal/auth`, `config`, `cache`, `wait`, `output`, `patch` — session, config, caching, task wait, envelopes
-- `plugin/netcup_mcp.py` + `bin/netcup-mcp` — FastMCP facade over the CLI
-- `.codex-plugin` / `.cursor-plugin` / `.claude-plugin` — host plugin manifests
+- `internal/mcpserver` + `netcup mcp` — MCP stdio server (thin CLI facade)
+- `.codex-plugin` / `.cursor-plugin` / `.claude-plugin` — host plugin manifests (`netcup mcp`)
 - `skills/netcup` — agent skill (prefer curated MCP tools, then `netcup_call` / `netcup_cli`)
 
 ## Commands
 
 ```bash
-make build                 # bin/netcup
+make build                 # dist/netcup
 make test                  # go test ./...
 make coverage              # OpenAPI ops mapped in internal/cmd
 make generate              # regenerate scpclient from openapi.json
@@ -40,12 +40,3 @@ This repo is also a Codex/Cursor/Claude plugin. Agents should use MCP tools (not
 - After `netcup spec update`, run `make generate`
 - Do not commit credentials or config under `~/.config/netcup`
 - MCP: prefer curated tools; full coverage via `netcup_call` / `netcup_cli`; never expose `tui` or `auth login` via MCP
-
-## Releases
-
-1. Move `[Unreleased]` notes into a dated section in `CHANGELOG.md`, update compare links, commit
-2. Annotated tag `vX.Y.Z` and push — `.github/workflows/release.yml` runs GoReleaser
-3. Bump `brandonkramer/homebrew-tap` `Formula/netcup.rb` URLs + sha256 from `checksums.txt`
-4. Verify with `brew upgrade brandonkramer/tap/netcup` and `netcup --version`
-
-Details: README → Develop → Releases. Never force-push `main` or retag an existing release.

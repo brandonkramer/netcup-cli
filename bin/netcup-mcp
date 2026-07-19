@@ -1,6 +1,0 @@
-#!/usr/bin/env bash
-# MCP stdio entrypoint for Codex / Cursor / Claude plugins.
-set -euo pipefail
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-export NETCUP_PLUGIN_ROOT="$ROOT"
-exec uv run --with mcp --python 3.12 python "$ROOT/plugin/netcup_mcp.py" "$@"

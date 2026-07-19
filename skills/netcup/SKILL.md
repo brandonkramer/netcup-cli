@@ -9,11 +9,11 @@ description: >-
 
 # netcup
 
-Humans use the `netcup` CLI / TUI. Agents use **MCP tools** in this plugin. Every tool shells out to `netcup … --format json -q` (plus `-y` when `confirm=true`). Same JSON envelopes as the CLI.
+Humans use the `netcup` CLI / TUI. Agents use **MCP tools** from `netcup mcp`. Every tool shells out to `netcup … --format json -q` (plus `-y` when `confirm=true`). Same JSON envelopes as the CLI.
 
-Prereqs: `netcup` on `PATH` (or `NETCUP_BIN`), `uv`, and a logged-in profile (`netcup auth login` — interactive; **never** via MCP).
+Prereqs: `netcup` on `PATH` (or `NETCUP_BIN`) and a logged-in profile (`netcup auth login` — interactive; **never** via MCP).
 
-Host install/refresh (human): `netcup install-mcp` from a checkout (`--scope user|project|local`, `--host claude|cursor|codex`).
+Host install/refresh (human): from a git checkout with `netcup` on `PATH` (or `make build` → `dist/netcup`), run `netcup install-mcp` (`--scope user|project|local`, `--host claude|cursor|codex`).
 
 ## Routing
 

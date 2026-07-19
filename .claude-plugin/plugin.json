@@ -1,6 +1,6 @@
 {
   "name": "netcup",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "netcup SCP CLI + MCP tools — servers, tasks, ISO, firewall, and full coverage via call/api/cli",
   "author": {
     "name": "brandonkramer",
@@ -13,7 +13,8 @@
   "skills": ["./skills"],
   "mcpServers": {
     "netcup": {
-      "command": "${CLAUDE_PLUGIN_ROOT}/bin/netcup-mcp"
+      "command": "netcup",
+      "args": ["mcp"]
     }
   }
 }

@@ -39,15 +39,15 @@ func newInstallMCPCmd() *cobra.Command {
 		Short: "Wire the netcup agent plugin into Claude, Cursor, and/or Codex",
 		Long: `Install or refresh the netcup MCP plugin for agent hosts.
 
-Resolves the plugin root (this git checkout — needs .codex-plugin/, bin/netcup-mcp,
-plugin/netcup_mcp.py). Homebrew/go-install binaries alone are not enough; pass
---root or set NETCUP_PLUGIN_ROOT to a clone.
+Resolves the plugin root in order: --root, NETCUP_PLUGIN_ROOT, then a git
+checkout (cwd / executable). Needs .codex-plugin/plugin.json. Hosts launch
+netcup mcp (binary on PATH or dist/netcup from make build).
 
   Claude   marketplace add + plugin install (scope: user|project|local)
   Cursor   merge mcp.json (project: .cursor/mcp.json, user: ~/.cursor/mcp.json)
   Codex    local marketplace + plugin add (user config; re-run to refresh)
 
-Requires uv on PATH. Re-run after pulling plugin updates to re-point hosts.`,
+Re-run after git pull to refresh hosts.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			app.Out.Command = "install-mcp"
@@ -79,10 +79,6 @@ Requires uv on PATH. Re-run after pulling plugin updates to re-point hosts.`,
 			proj, err = filepath.Abs(proj)
 			if err != nil {
 				return output.Exit(output.ExitUsage, "resolve project dir: "+err.Error())
-			}
-
-			if _, err := exec.LookPath("uv"); err != nil {
-				return output.Exit(output.ExitUsage, "uv not found on PATH (required to launch bin/netcup-mcp)")
 			}
 
 			results := make([]map[string]any, 0, len(selected))
@@ -210,8 +206,8 @@ func resolvePluginRoot(explicit string) (string, error) {
 		}
 	}
 	return "", output.Exit(output.ExitUsage,
-		"plugin root not found (need .codex-plugin/plugin.json, bin/netcup-mcp, plugin/netcup_mcp.py); "+
-			"run from a netcup-cli checkout or pass --root / set NETCUP_PLUGIN_ROOT")
+		"plugin root not found (need .codex-plugin/plugin.json); "+
+			"run from a checkout, or pass --root / set NETCUP_PLUGIN_ROOT")
 }
 
 func findPluginRoot(start string) (string, bool) {
@@ -243,17 +239,23 @@ func requirePluginRoot(path string) (string, error) {
 }
 
 func validatePluginRoot(root string) error {
-	checks := []string{
-		filepath.Join(root, ".codex-plugin", "plugin.json"),
-		filepath.Join(root, "bin", "netcup-mcp"),
-		filepath.Join(root, "plugin", "netcup_mcp.py"),
-	}
-	for _, p := range checks {
-		if st, err := os.Stat(p); err != nil || st.IsDir() {
-			return fmt.Errorf("not a netcup plugin root (%s missing)", p)
-		}
+	manifest := filepath.Join(root, ".codex-plugin", "plugin.json")
+	if st, err := os.Stat(manifest); err != nil || st.IsDir() {
+		return fmt.Errorf("not a netcup plugin root (%s missing)", manifest)
 	}
 	return nil
+}
+
+// resolveMCPCommand returns command+args to start netcup mcp for host configs.
+func resolveMCPCommand(pluginRoot string) (command string, args []string) {
+	dist := filepath.Join(pluginRoot, "dist", "netcup")
+	if st, err := os.Stat(dist); err == nil && !st.IsDir() {
+		return dist, []string{"mcp"}
+	}
+	if p, err := exec.LookPath("netcup"); err == nil {
+		return p, []string{"mcp"}
+	}
+	return "netcup", []string{"mcp"}
 }
 
 func installMCPClaude(cmd *cobra.Command, pluginRoot, scope, projectDir string, dryRun bool) (map[string]any, error) {
@@ -362,7 +364,7 @@ func ensureClaudeMarketplace(marketDir, pluginRoot string) error {
 
 func installMCPCursor(pluginRoot, scope, projectDir string, dryRun bool) (map[string]any, error) {
 	res := map[string]any{"host": mcpHostCursor, "scope": scope}
-	launcher := filepath.Join(pluginRoot, "bin", "netcup-mcp")
+	command, mcpArgs := resolveMCPCommand(pluginRoot)
 
 	var mcpPath string
 	switch scope {
@@ -386,12 +388,12 @@ func installMCPCursor(pluginRoot, scope, projectDir string, dryRun bool) (map[st
 	if dryRun {
 		res["status"] = "dry-run"
 		if res["note"] == nil {
-			res["note"] = fmt.Sprintf("would merge mcp server command=bash args=[%s]", launcher)
+			res["note"] = fmt.Sprintf("would merge mcp server command=%s args=%v", command, mcpArgs)
 		}
 		return res, nil
 	}
 
-	if err := mergeCursorMCPJSON(mcpPath, launcher); err != nil {
+	if err := mergeCursorMCPJSON(mcpPath, command, mcpArgs); err != nil {
 		return nil, err
 	}
 	res["status"] = "ok"
@@ -403,7 +405,7 @@ func installMCPCursor(pluginRoot, scope, projectDir string, dryRun bool) (map[st
 	return res, nil
 }
 
-func mergeCursorMCPJSON(path, launcher string) error {
+func mergeCursorMCPJSON(path, command string, args []string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return output.Exit(output.ExitAPI, "mkdir cursor config: "+err.Error())
 	}
@@ -421,8 +423,8 @@ func mergeCursorMCPJSON(path, launcher string) error {
 		root["mcpServers"] = servers
 	}
 	servers["netcup"] = map[string]any{
-		"command": "bash",
-		"args":    []string{launcher},
+		"command": command,
+		"args":    args,
 	}
 
 	out, err := json.MarshalIndent(root, "", "  ")

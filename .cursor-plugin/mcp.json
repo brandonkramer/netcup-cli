@@ -1,8 +1,8 @@
 {
   "mcpServers": {
     "netcup": {
-      "command": "bash",
-      "args": ["../bin/netcup-mcp"]
+      "command": "netcup",
+      "args": ["mcp"]
     }
   }
 }
