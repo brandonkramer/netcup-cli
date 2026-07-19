@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "netcup": {
+      "command": "netcup",
+      "args": ["mcp"]
+    }
+  }
+}

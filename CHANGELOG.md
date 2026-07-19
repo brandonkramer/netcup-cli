@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-07-19
+
+### Added
+
+- `netcup install-mcp` materializes embedded plugin files into `~/.config/netcup/plugin` when no checkout is found (Homebrew / `go install` / Releases)
+
 ### Changed
 
 - `make build` writes `bin/netcup` again (reverted `dist/` from the dropped npm packaging)
@@ -68,7 +74,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Body-less HTTP 202 jobs reported as `UNTRACKED` instead of success
 - Signal-aware CLI exit (`130`) and cancelable TUI retries
 
-[Unreleased]: https://github.com/brandonkramer/netcup-cli/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/brandonkramer/netcup-cli/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/brandonkramer/netcup-cli/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/brandonkramer/netcup-cli/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/brandonkramer/netcup-cli/compare/v0.1.2...v0.2.0
 [0.1.2]: https://github.com/brandonkramer/netcup-cli/compare/v0.1.1...v0.1.2

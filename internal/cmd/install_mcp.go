@@ -8,7 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/brandonkramer/netcup-cli/internal/config"
 	"github.com/brandonkramer/netcup-cli/internal/output"
+	"github.com/brandonkramer/netcup-cli/internal/pluginassets"
 	"github.com/spf13/cobra"
 )
 
@@ -39,15 +41,16 @@ func newInstallMCPCmd() *cobra.Command {
 		Short: "Wire the netcup agent plugin into Claude, Cursor, and/or Codex",
 		Long: `Install or refresh the netcup MCP plugin for agent hosts.
 
-Resolves the plugin root in order: --root, NETCUP_PLUGIN_ROOT, then a git
-checkout (cwd / executable). Needs .codex-plugin/plugin.json. Hosts launch
-netcup mcp (binary on PATH or bin/netcup from make build).
+Resolves the plugin root in order: --root, NETCUP_PLUGIN_ROOT, a git
+checkout (cwd / executable), then materializes embedded plugin files into
+~/.config/netcup/plugin (Homebrew / go install / Releases). Needs
+.codex-plugin/plugin.json. Hosts launch netcup mcp (PATH or bin/netcup).
 
   Claude   marketplace add + plugin install (scope: user|project|local)
   Cursor   merge mcp.json (project: .cursor/mcp.json, user: ~/.cursor/mcp.json)
   Codex    local marketplace + plugin add (user config; re-run to refresh)
 
-Re-run after git pull to refresh hosts.`,
+Re-run after upgrading netcup (or git pull in a checkout) to refresh hosts.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			app.Out.Command = "install-mcp"
@@ -64,7 +67,7 @@ Re-run after git pull to refresh hosts.`,
 				return err
 			}
 
-			root, err := resolvePluginRoot(pluginRoot)
+			root, err := resolvePluginRoot(pluginRoot, version)
 			if err != nil {
 				return err
 			}
@@ -128,7 +131,7 @@ Re-run after git pull to refresh hosts.`,
 	}
 	c.Flags().StringSliceVar(&hosts, "host", []string{mcpHostAll}, "hosts: all|claude|cursor|codex (repeatable)")
 	c.Flags().StringVar(&scope, "scope", mcpScopeUser, "install scope: user|project|local (Claude; Cursor uses user|project)")
-	c.Flags().StringVar(&pluginRoot, "root", "", "plugin root (default: NETCUP_PLUGIN_ROOT or detect from cwd/executable)")
+	c.Flags().StringVar(&pluginRoot, "root", "", "plugin root (default: env, checkout, or ~/.config/netcup/plugin)")
 	c.Flags().StringVar(&projectDir, "project-dir", "", "project directory for project/local scope (default: cwd)")
 	c.Flags().BoolVarP(&dryRun, "dry-run", "n", false, "print actions without changing host config")
 	return c
@@ -184,7 +187,7 @@ func normalizeMCPHosts(hosts []string) ([]string, error) {
 	return out, nil
 }
 
-func resolvePluginRoot(explicit string) (string, error) {
+func resolvePluginRoot(explicit, binaryVersion string) (string, error) {
 	if v := strings.TrimSpace(explicit); v != "" {
 		return requirePluginRoot(v)
 	}
@@ -205,9 +208,11 @@ func resolvePluginRoot(explicit string) (string, error) {
 			return root, nil
 		}
 	}
-	return "", output.Exit(output.ExitUsage,
-		"plugin root not found (need .codex-plugin/plugin.json); "+
-			"run from a checkout, or pass --root / set NETCUP_PLUGIN_ROOT")
+	dest := filepath.Join(config.DefaultConfigDir(), "plugin")
+	if err := pluginassets.Materialize(dest, binaryVersion); err != nil {
+		return "", output.Exit(output.ExitAPI, "materialize plugin root: "+err.Error())
+	}
+	return requirePluginRoot(dest)
 }
 
 func findPluginRoot(start string) (string, bool) {

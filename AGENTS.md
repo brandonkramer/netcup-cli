@@ -12,6 +12,7 @@ User docs: [README.md](./README.md). Release notes: [CHANGELOG.md](./CHANGELOG.m
 - `internal/scpclient` — generated OpenAPI client (`make generate` from `openapi.json`)
 - `internal/auth`, `config`, `cache`, `wait`, `output`, `patch` — session, config, caching, task wait, envelopes
 - `internal/mcpserver` + `netcup mcp` — MCP stdio server (thin CLI facade)
+- `internal/pluginassets` — embedded manifests/skill for `install-mcp` without a checkout
 - `.codex-plugin` / `.cursor-plugin` / `.claude-plugin` — host plugin manifests (`netcup mcp`)
 - `skills/netcup` — agent skill (prefer curated MCP tools, then `netcup_call` / `netcup_cli`)
 
@@ -40,3 +41,4 @@ This repo is also a Codex/Cursor/Claude plugin. Agents should use MCP tools (not
 - After `netcup spec update`, run `make generate`
 - Do not commit credentials or config under `~/.config/netcup`
 - MCP: prefer curated tools; full coverage via `netcup_call` / `netcup_cli`; never expose `tui` or `auth login` via MCP
+- After editing `.codex-plugin` / `.claude-plugin` / `.cursor-plugin` / `skills/netcup`, run `make sync-plugin-assets`

@@ -366,19 +366,18 @@ netcup call "firewall-policies create" --body @policy.json -y
 
 This repository is also a **Codex / Cursor / Claude** plugin. MCP tools shell out to `netcup --format json` via `netcup mcp`.
 
-**Prereqs:** `netcup` on `PATH` (`brew` / `go install` / Releases / `make build`), `netcup auth login` once, and a **git checkout** as the plugin root (manifests + skill).
+**Prereqs:** `netcup` on `PATH` (`brew` / `go install` / Releases / `make build`) and `netcup auth login` once.
 
 ### One-shot host wiring
 
 ```bash
-# from a checkout (or pass --root / NETCUP_PLUGIN_ROOT)
 netcup install-mcp                     # Claude + Cursor + Codex, --scope user
 netcup install-mcp --scope project     # project-local Claude + Cursor mcp.json
 netcup install-mcp --host claude --scope local
 netcup install-mcp --dry-run
 ```
 
-Re-run after `git pull` to refresh hosts.
+Uses a git checkout when present; otherwise materializes plugin files into `~/.config/netcup/plugin`. Override with `--root` / `NETCUP_PLUGIN_ROOT`. Re-run after upgrading `netcup` (or `git pull` in a checkout).
 
 | Host | What `install-mcp` does |
 |------|-------------------------|

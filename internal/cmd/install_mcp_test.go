@@ -45,6 +45,35 @@ func TestValidateAndFindPluginRoot(t *testing.T) {
 	}
 }
 
+func TestResolvePluginRootMaterialize(t *testing.T) {
+	cfg := t.TempDir()
+	t.Setenv("NETCUP_CONFIG_DIR", cfg)
+	t.Setenv("NETCUP_PLUGIN_ROOT", "")
+
+	// Empty cwd that is not under a checkout with manifests.
+	empty := t.TempDir()
+	prev, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(empty); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(prev) })
+
+	root, err := resolvePluginRoot("", "1.2.3-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join(cfg, "plugin")
+	if root != want {
+		t.Fatalf("root=%q want %q", root, want)
+	}
+	if err := validatePluginRoot(root); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestResolveMCPCommand(t *testing.T) {
 	root := t.TempDir()
 	binDir := filepath.Join(root, "bin")
