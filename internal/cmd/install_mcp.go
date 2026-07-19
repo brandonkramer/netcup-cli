@@ -41,7 +41,7 @@ func newInstallMCPCmd() *cobra.Command {
 
 Resolves the plugin root in order: --root, NETCUP_PLUGIN_ROOT, then a git
 checkout (cwd / executable). Needs .codex-plugin/plugin.json. Hosts launch
-netcup mcp (binary on PATH or dist/netcup from make build).
+netcup mcp (binary on PATH or bin/netcup from make build).
 
   Claude   marketplace add + plugin install (scope: user|project|local)
   Cursor   merge mcp.json (project: .cursor/mcp.json, user: ~/.cursor/mcp.json)
@@ -248,9 +248,9 @@ func validatePluginRoot(root string) error {
 
 // resolveMCPCommand returns command+args to start netcup mcp for host configs.
 func resolveMCPCommand(pluginRoot string) (command string, args []string) {
-	dist := filepath.Join(pluginRoot, "dist", "netcup")
-	if st, err := os.Stat(dist); err == nil && !st.IsDir() {
-		return dist, []string{"mcp"}
+	local := filepath.Join(pluginRoot, "bin", "netcup")
+	if st, err := os.Stat(local); err == nil && !st.IsDir() {
+		return local, []string{"mcp"}
 	}
 	if p, err := exec.LookPath("netcup"); err == nil {
 		return p, []string{"mcp"}

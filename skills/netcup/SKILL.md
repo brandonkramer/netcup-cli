@@ -13,7 +13,7 @@ Humans use the `netcup` CLI / TUI. Agents use **MCP tools** from `netcup mcp`. E
 
 Prereqs: `netcup` on `PATH` (or `NETCUP_BIN`) and a logged-in profile (`netcup auth login` — interactive; **never** via MCP).
 
-Host install/refresh (human): from a git checkout with `netcup` on `PATH` (or `make build` → `dist/netcup`), run `netcup install-mcp` (`--scope user|project|local`, `--host claude|cursor|codex`).
+Host install/refresh (human): from a git checkout with `netcup` on `PATH` (or `make build` → `bin/netcup`), run `netcup install-mcp` (`--scope user|project|local`, `--host claude|cursor|codex`).
 
 ## Routing
 

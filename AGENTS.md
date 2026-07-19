@@ -18,7 +18,7 @@ User docs: [README.md](./README.md). Release notes: [CHANGELOG.md](./CHANGELOG.m
 ## Commands
 
 ```bash
-make build                 # dist/netcup
+make build                 # bin/netcup
 make test                  # go test ./...
 make coverage              # OpenAPI ops mapped in internal/cmd
 make generate              # regenerate scpclient from openapi.json

@@ -1,4 +1,5 @@
-/dist/
+/bin/netcup
+/bin/netcup.exe
 *.exe
 .DS_Store
 coverage.out

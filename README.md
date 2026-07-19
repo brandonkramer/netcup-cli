@@ -31,7 +31,7 @@ git clone https://github.com/brandonkramer/netcup-cli.git
 cd netcup-cli
 make build
 # optional: install onto PATH
-cp dist/netcup "$(go env GOPATH)/bin/netcup"
+cp bin/netcup "$(go env GOPATH)/bin/netcup"
 ```
 
 ### Update
@@ -386,7 +386,7 @@ Re-run after `git pull` to refresh hosts.
 | Cursor | Merges `netcup` → `netcup mcp` into mcp.json |
 | Codex | Writes local Codex catalog + `codex plugin marketplace add` / `plugin add` |
 
-Manual stdio smoke: `netcup mcp` (or `./dist/netcup mcp` from a checkout).
+Manual stdio smoke: `netcup mcp` (or `./bin/netcup mcp` from a checkout).
 
 **Tool layers:** curated tools for servers / power / tasks / ISO / firewall get; full CLI reach via `netcup_endpoints` → `netcup_describe` → `netcup_call`, or `netcup_cli` for allowlisted argv. Destructive calls need `confirm=true`. Blocked: TUI, `auth login`, secret-on-argv. Skill: [`skills/netcup/SKILL.md`](./skills/netcup/SKILL.md).
 
@@ -396,7 +396,7 @@ Manual stdio smoke: `netcup mcp` (or `./dist/netcup mcp` from a checkout).
 
 ```bash
 make generate   # regenerate client from openapi.json
-make build      # dist/netcup
+make build      # bin/netcup
 make coverage   # assert all OpenAPI ops are mapped
 go test ./...
 ```

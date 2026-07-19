@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `make build` writes `bin/netcup` again (reverted `dist/` from the dropped npm packaging)
+
 ## [0.2.1] - 2026-07-19
 
 ### Added
@@ -15,7 +19,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- `make build` writes `dist/netcup`
 - Agent host manifests invoke `netcup mcp` instead of the Python FastMCP launcher
 - Removed `plugin/netcup_mcp.py`
 
